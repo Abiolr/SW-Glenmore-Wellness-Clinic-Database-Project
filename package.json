@@ -1,0 +1,21 @@
+{
+  "name": "sw-glenmore-wellness-clinic-database-project",
+  "version": "1.0.0",
+  "description": "The SW Glenmore Wellness Clinic Database manages patients, staff, appointments, billing, and clinical records. It streamlines scheduling, payments, and reporting, replacing manual systems to improve efficiency, accuracy, and quality of healthcare services.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "vite": "^7.1.9"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
+  }
+}
