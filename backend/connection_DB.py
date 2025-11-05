@@ -17,4 +17,3 @@ except Exception as e:
 # api endpoints#
 
 db = client[db_name]
-print(f"Connected to database: {db_name}")
