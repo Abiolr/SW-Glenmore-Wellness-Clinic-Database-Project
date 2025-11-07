@@ -7,7 +7,12 @@ from dotenv import load_dotenv
 load_dotenv()
 uri = os.getenv('MONGODB_URI')
 db_name = os.getenv('DB_NAME')
-client = MongoClient(uri, server_api=ServerApi('1'))
+client = MongoClient(
+        uri,
+        server_api=ServerApi('1'),
+        tls=True,
+        tlsCAFile=certifi.where()
+    )
 # Send a ping to confirm a successful connection
 try:
     client.admin.command('ping')
