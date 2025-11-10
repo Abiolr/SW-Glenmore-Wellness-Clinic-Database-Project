@@ -1,9 +1,4 @@
-#database operations
-# Use package-relative import when running as a module, fallback to absolute when run as a script
-try:
-    from .connection_DB import db
-except Exception:
-    from connection_DB import db
+from .connection_DB import db
 from pymongo.collection import ReturnDocument
 
 #Database function to get the next sequence number for a given ID name
