@@ -1,5 +1,5 @@
 #database operations
-from db_connection import db
+from connection_DB import db
 #Database function to get the next sequence number for a given ID name
 def get_next_sequence(id_name: str) -> int:
     """
