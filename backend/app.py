@@ -38,7 +38,7 @@ def home():
 WEEKLY COVERAGE ENDPOINTS
 =========================
 """
-@app.route('/get_staff_assignments', methods=['GET'])
+@app.route('/staff_assignments', methods=['GET'])
 def get_staff_assignments():
     """
     Lists all staff assignments. Logic is handled in weekly_coverage.py.
@@ -49,7 +49,7 @@ def get_staff_assignments():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Route error: {str(e)}"}), 500
 
-@app.route('/add_staff_assignment', methods=['POST'])
+@app.route('/staff_assignment', methods=['POST'])
 def add_staff_assignment():
     """
     Adds a new staff assignment. Logic is handled in weekly_coverage.py.
@@ -61,7 +61,7 @@ def add_staff_assignment():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Route error: {str(e)}"}), 500
 
-@app.route('/update_staff_assignment/<int:assignment_id>', methods=['PUT'])
+@app.route('/staff_assignment/<int:assignment_id>', methods=['PUT'])
 def update_staff_assignment(assignment_id):
     """
     Updates an existing assignment. Logic is handled in weekly_coverage.py.
@@ -73,7 +73,7 @@ def update_staff_assignment(assignment_id):
     except Exception as e:
         return jsonify({"status": "error", "message": f"Route error: {str(e)}"}), 500
 
-@app.route('/delete_staff_assignment/<int:assignment_id>', methods=['DELETE'])
+@app.route('/staff_assignment/<int:assignment_id>', methods=['DELETE'])
 def delete_staff_assignment(assignment_id):
     """
     Deletes an existing assignment. Logic is handled in weekly_coverage.py.
