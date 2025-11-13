@@ -1,4 +1,4 @@
-from .connection_DB import db
+from .services.connection_DB import db
 from database import get_next_sequence
 
 # Add staff function

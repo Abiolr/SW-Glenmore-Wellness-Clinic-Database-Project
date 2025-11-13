@@ -1,0 +1,130 @@
+[
+  {
+    "first_name": "Sarah",
+    "last_name": "Johnson",
+    "role": "Physician",
+    "phone": "403-555-0101",
+    "email": "sarah.johnson@glenmoremedical.com",
+    "specialization": "Pediatrics"
+  },
+  {
+    "first_name": "Michael",
+    "last_name": "Chen",
+    "role": "Physician",
+    "phone": "403-555-0102",
+    "email": "michael.chen@glenmoremedical.com",
+    "specialization": "Internal Medicine"
+  },
+  {
+    "first_name": "Emily",
+    "last_name": "Rodriguez",
+    "role": "Physician",
+    "phone": "403-555-0103",
+    "email": "emily.rodriguez@glenmoremedical.com",
+    "specialization": "Family Medicine"
+  },
+  {
+    "first_name": "David",
+    "last_name": "Thompson",
+    "role": "Physician",
+    "phone": "403-555-0104",
+    "email": "david.thompson@glenmoremedical.com",
+    "specialization": "Internal Medicine"
+  },
+  {
+    "first_name": "Jennifer",
+    "last_name": "Martinez",
+    "role": "Physician",
+    "phone": "403-555-0105",
+    "email": "jennifer.martinez@glenmoremedical.com",
+    "specialization": "Pediatrics"
+  },
+  {
+    "first_name": "Amanda",
+    "last_name": "Williams",
+    "role": "Nurse Practitioner",
+    "phone": "403-555-0106",
+    "email": "amanda.williams@glenmoremedical.com",
+    "specialization": "Primary Care"
+  },
+  {
+    "first_name": "Robert",
+    "last_name": "Davis",
+    "role": "Nurse Practitioner",
+    "phone": "403-555-0107",
+    "email": "robert.davis@glenmoremedical.com",
+    "specialization": "Primary Care"
+  },
+  {
+    "first_name": "Lisa",
+    "last_name": "Anderson",
+    "role": "Registered Nurse",
+    "phone": "403-555-0108",
+    "email": "lisa.anderson@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Maria",
+    "last_name": "Garcia",
+    "role": "Registered Nurse",
+    "phone": "403-555-0109",
+    "email": "maria.garcia@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Catherine",
+    "last_name": "Brown",
+    "role": "Midwife",
+    "phone": "403-555-0110",
+    "email": "catherine.brown@glenmoremedical.com",
+    "specialization": "Prenatal and Delivery Care"
+  },
+  {
+    "first_name": "Rachel",
+    "last_name": "Wilson",
+    "role": "Midwife",
+    "phone": "403-555-0111",
+    "email": "rachel.wilson@glenmoremedical.com",
+    "specialization": "Prenatal and Delivery Care"
+  },
+  {
+    "first_name": "James",
+    "last_name": "Taylor",
+    "role": "Pharmacist",
+    "phone": "403-555-0112",
+    "email": "james.taylor@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Kevin",
+    "last_name": "Lee",
+    "role": "Medical Technician",
+    "phone": "403-555-0113",
+    "email": "kevin.lee@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Patricia",
+    "last_name": "Moore",
+    "role": "Office Administrator",
+    "phone": "403-555-0114",
+    "email": "patricia.moore@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Nancy",
+    "last_name": "White",
+    "role": "Receptionist",
+    "phone": "403-555-0115",
+    "email": "nancy.white@glenmoremedical.com",
+    "specialization": null
+  },
+  {
+    "first_name": "Thomas",
+    "last_name": "Harris",
+    "role": "Bookkeeper",
+    "phone": "403-555-0116",
+    "email": "thomas.harris@glenmoremedical.com",
+    "specialization": null
+  }
+]

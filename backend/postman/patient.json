@@ -1,0 +1,202 @@
+[
+  {
+    "first_name": "John",
+    "last_name": "Smith",
+    "date_of_birth": "1985-06-15",
+    "phone": "403-555-1001",
+    "email": "john.smith@email.com",
+    "address": "123 Main St, Calgary, AB T2P 1A1",
+    "emergency_contact": "Jane Smith",
+    "emergency_phone": "403-555-1002"
+  },
+  {
+    "first_name": "Emma",
+    "last_name": "Johnson",
+    "date_of_birth": "1990-03-22",
+    "phone": "403-555-1003",
+    "email": "emma.johnson@email.com",
+    "address": "456 Oak Ave, Calgary, AB T2P 2B2",
+    "emergency_contact": "Robert Johnson",
+    "emergency_phone": "403-555-1004"
+  },
+  {
+    "first_name": "Michael",
+    "last_name": "Williams",
+    "date_of_birth": "1978-11-08",
+    "phone": "403-555-1005",
+    "email": "michael.williams@email.com",
+    "address": "789 Pine Rd, Calgary, AB T2P 3C3",
+    "emergency_contact": "Sarah Williams",
+    "emergency_phone": "403-555-1006"
+  },
+  {
+    "first_name": "Olivia",
+    "last_name": "Brown",
+    "date_of_birth": "2015-08-14",
+    "phone": "403-555-1007",
+    "email": "olivia.parent@email.com",
+    "address": "321 Maple Dr, Calgary, AB T2P 4D4",
+    "emergency_contact": "Jennifer Brown",
+    "emergency_phone": "403-555-1008"
+  },
+  {
+    "first_name": "James",
+    "last_name": "Davis",
+    "date_of_birth": "1965-01-30",
+    "phone": "403-555-1009",
+    "email": "james.davis@email.com",
+    "address": "654 Elm St, Calgary, AB T2P 5E5",
+    "emergency_contact": "Linda Davis",
+    "emergency_phone": "403-555-1010"
+  },
+  {
+    "first_name": "Sophia",
+    "last_name": "Martinez",
+    "date_of_birth": "1992-07-19",
+    "phone": "403-555-1011",
+    "email": "sophia.martinez@email.com",
+    "address": "987 Birch Ln, Calgary, AB T2P 6F6",
+    "emergency_contact": "Carlos Martinez",
+    "emergency_phone": "403-555-1012"
+  },
+  {
+    "first_name": "William",
+    "last_name": "Garcia",
+    "date_of_birth": "1988-04-05",
+    "phone": "403-555-1013",
+    "email": "william.garcia@email.com",
+    "address": "147 Cedar Ct, Calgary, AB T2P 7G7",
+    "emergency_contact": "Maria Garcia",
+    "emergency_phone": "403-555-1014"
+  },
+  {
+    "first_name": "Ava",
+    "last_name": "Rodriguez",
+    "date_of_birth": "2018-12-01",
+    "phone": "403-555-1015",
+    "email": "ava.parent@email.com",
+    "address": "258 Spruce Way, Calgary, AB T2P 8H8",
+    "emergency_contact": "Emily Rodriguez",
+    "emergency_phone": "403-555-1016"
+  },
+  {
+    "first_name": "Benjamin",
+    "last_name": "Wilson",
+    "date_of_birth": "1972-09-27",
+    "phone": "403-555-1017",
+    "email": "benjamin.wilson@email.com",
+    "address": "369 Aspen Blvd, Calgary, AB T2P 9I9",
+    "emergency_contact": "Rachel Wilson",
+    "emergency_phone": "403-555-1018"
+  },
+  {
+    "first_name": "Isabella",
+    "last_name": "Anderson",
+    "date_of_birth": "1995-02-14",
+    "phone": "403-555-1019",
+    "email": "isabella.anderson@email.com",
+    "address": "741 Willow Ave, Calgary, AB T2P 0J0",
+    "emergency_contact": "Lisa Anderson",
+    "emergency_phone": "403-555-1020"
+  },
+  {
+    "first_name": "Ethan",
+    "last_name": "Thomas",
+    "date_of_birth": "2010-05-23",
+    "phone": "403-555-1021",
+    "email": "ethan.parent@email.com",
+    "address": "852 Poplar St, Calgary, AB T2P 1K1",
+    "emergency_contact": "Amanda Thomas",
+    "emergency_phone": "403-555-1022"
+  },
+  {
+    "first_name": "Mia",
+    "last_name": "Taylor",
+    "date_of_birth": "1983-10-11",
+    "phone": "403-555-1023",
+    "email": "mia.taylor@email.com",
+    "address": "963 Hickory Rd, Calgary, AB T2P 2L2",
+    "emergency_contact": "James Taylor",
+    "emergency_phone": "403-555-1024"
+  },
+  {
+    "first_name": "Alexander",
+    "last_name": "Moore",
+    "date_of_birth": "1998-06-07",
+    "phone": "403-555-1025",
+    "email": "alexander.moore@email.com",
+    "address": "159 Chestnut Dr, Calgary, AB T2P 3M3",
+    "emergency_contact": "Patricia Moore",
+    "emergency_phone": "403-555-1026"
+  },
+  {
+    "first_name": "Charlotte",
+    "last_name": "Jackson",
+    "date_of_birth": "2012-03-18",
+    "phone": "403-555-1027",
+    "email": "charlotte.parent@email.com",
+    "address": "357 Walnut Ln, Calgary, AB T2P 4N4",
+    "emergency_contact": "Kevin Jackson",
+    "emergency_phone": "403-555-1028"
+  },
+  {
+    "first_name": "Daniel",
+    "last_name": "White",
+    "date_of_birth": "1980-08-25",
+    "phone": "403-555-1029",
+    "email": "daniel.white@email.com",
+    "address": "468 Beech Ave, Calgary, AB T2P 5O5",
+    "emergency_contact": "Nancy White",
+    "emergency_phone": "403-555-1030"
+  },
+  {
+    "first_name": "Amelia",
+    "last_name": "Harris",
+    "date_of_birth": "1987-12-09",
+    "phone": "403-555-1031",
+    "email": "amelia.harris@email.com",
+    "address": "579 Sycamore Ct, Calgary, AB T2P 6P6",
+    "emergency_contact": "Thomas Harris",
+    "emergency_phone": "403-555-1032"
+  },
+  {
+    "first_name": "Matthew",
+    "last_name": "Martin",
+    "date_of_birth": "1993-04-16",
+    "phone": "403-555-1033",
+    "email": "matthew.martin@email.com",
+    "address": "680 Magnolia Way, Calgary, AB T2P 7Q7",
+    "emergency_contact": "Jessica Martin",
+    "emergency_phone": "403-555-1034"
+  },
+  {
+    "first_name": "Harper",
+    "last_name": "Thompson",
+    "date_of_birth": "2016-11-29",
+    "phone": "403-555-1035",
+    "email": "harper.parent@email.com",
+    "address": "791 Dogwood Blvd, Calgary, AB T2P 8R8",
+    "emergency_contact": "David Thompson",
+    "emergency_phone": "403-555-1036"
+  },
+  {
+    "first_name": "Joseph",
+    "last_name": "Lee",
+    "date_of_birth": "1976-07-04",
+    "phone": "403-555-1037",
+    "email": "joseph.lee@email.com",
+    "address": "802 Redwood St, Calgary, AB T2P 9S9",
+    "emergency_contact": "Kevin Lee",
+    "emergency_phone": "403-555-1038"
+  },
+  {
+    "first_name": "Evelyn",
+    "last_name": "Walker",
+    "date_of_birth": "1991-01-21",
+    "phone": "403-555-1039",
+    "email": "evelyn.walker@email.com",
+    "address": "913 Sequoia Ave, Calgary, AB T2P 0T0",
+    "emergency_contact": "Robert Walker",
+    "emergency_phone": "403-555-1040"
+  }
+]

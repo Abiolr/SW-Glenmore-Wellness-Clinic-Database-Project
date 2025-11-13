@@ -1,24 +1,29 @@
 # weekly_coverage.py
 
-from database import get_next_sequence
+from services.database import get_next_sequence
 
 def handle_get_staff_assignments(db):
     """
-    Handles the logic for fetching all staff assignments.
+    Handles the logic for fetching all staff assignments,
+    sorted by date and then on_call_start time.
     """
     if db is None:
         return {"status": "error", "message": "Database not connected"}, 500
         
     try:
         collection = db.WeeklyCoverage
-        assignments_cursor = collection.find()
+        
+        # Find all documents and sort them
+        # Sort by 'date' (ascending, 1) then 'on_call_start' (ascending, 1)
+        assignments_cursor = collection.find().sort([
+            ("date", 1),
+            ("on_call_start", 1)
+        ])
         
         assignments_list = []
         for doc in assignments_cursor:
             doc.pop('_id', None) 
             
-            # This mapping is useful if your frontend expects specific keys
-            # or if you want to ensure no extra DB fields are sent.
             assignments_list.append({
                 "assignment_id": doc.get("assignment_id"),
                 "date": doc.get("date"),

@@ -1,5 +1,5 @@
 from database import get_next_sequence
-from .connection_DB import db
+from .services.connection_DB import db
 from datetime import datetime
 # Insert appointment-related functions here
 def insert_weekly_coverage(staff_id: int, week_start, on_call_phone: str, notes: str = None):
