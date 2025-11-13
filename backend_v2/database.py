@@ -14,7 +14,7 @@ class Database:
         """Connect to MongoDB database"""
         try:
             mongodb_url = os.getenv("MONGODB_URL")
-            db_name = os.getenv("MONGODB_DB_NAME", "wellness_clinic")
+            db_name = os.getenv("MONGODB_DB_NAME", "GlenmoreWellnessDB")
             
             cls.client = MongoClient(mongodb_url)
             cls.db = cls.client[db_name]
