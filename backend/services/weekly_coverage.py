@@ -30,7 +30,7 @@ def handle_get_staff_assignments(db):
                 "staff_name": doc.get("staff_name"),
                 "on_call_start": doc.get("on_call_start"),
                 "on_call_end": doc.get("on_call_end"),
-                "phone_number": doc.get("phone_number")
+                "phone": doc.get("phone")
             })
             
         return {
@@ -56,7 +56,7 @@ def handle_add_staff_assignment(db, data):
             return {"status": "error", "message": "No input data provided"}, 400
         
         # --- Validation ---
-        required_fields = ['date', 'staff_name', 'on_call_start', 'on_call_end', 'phone_number']
+        required_fields = ['date', 'staff_name', 'on_call_start', 'on_call_end', 'phone']
         missing_fields = [field for field in required_fields if field not in data]
         
         if missing_fields:
@@ -75,7 +75,7 @@ def handle_add_staff_assignment(db, data):
             "staff_name": data['staff_name'],
             "on_call_start": data['on_call_start'],
             "on_call_end": data['on_call_end'],
-            "phone_number": data['phone_number']
+            "phone": data['phone']
         }
 
         # --- Database Insertion ---
@@ -115,8 +115,8 @@ def handle_update_staff_assignment(db, assignment_id, data):
             update_data["on_call_start"] = data.get("on_call_start")
         if data.get("on_call_end") is not None:
             update_data["on_call_end"] = data.get("on_call_end")
-        if data.get("phone_number") is not None:
-            update_data["phone_number"] = data.get("phone_number")
+        if data.get("phone") is not None:
+            update_data["phone"] = data.get("phone")
             
         if not update_data:
             return {"status": "error", "message": "No fields to update provided"}, 400
