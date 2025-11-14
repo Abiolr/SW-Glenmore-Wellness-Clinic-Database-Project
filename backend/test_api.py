@@ -1,5 +1,5 @@
 """
-Test script for the Wellness Clinic API
+Test script for the Wellness Clinic Flask API
 Run this after starting the server to verify functionality
 """
 

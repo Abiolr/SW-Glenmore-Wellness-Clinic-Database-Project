@@ -1,0 +1,92 @@
+SW GLENMORE WELLNESS CLINIC - COMPLETE FLASK BACKEND
+=====================================================
+
+TOTAL FILES: 24
+
+MAIN APPLICATION FILES
+======================
+1.  app.py (28 KB) - Flask application with 60+ API endpoints
+2.  database.py (2 KB) - MongoDB connection and utilities
+3.  models.py (7 KB) - Pydantic data validation models
+
+CRUD OPERATION FILES
+====================
+4.  crud_patient.py (3 KB) - Patient management operations
+5.  crud_staff.py (3 KB) - Staff management operations
+6.  crud_appointment.py (7 KB) - Appointment scheduling operations
+7.  crud_visit.py (6 KB) - Visit tracking operations
+8.  crud_invoice.py (8 KB) - Invoice and payment operations
+9.  crud_other.py (12 KB) - Other entity operations
+
+CONFIGURATION FILES
+===================
+10. requirements.txt (1 KB) - Python dependencies for Flask
+11. .env.example (1 KB) - Environment variables template
+12. .gitignore (1 KB) - Git ignore rules
+
+DOCUMENTATION FILES
+===================
+13. START_HERE_FLASK.md (8 KB) - Main entry point and overview
+14. FLASK_QUICKSTART.md (10 KB) - Detailed Flask setup guide
+15. FLASK_MIGRATION.md (3 KB) - FastAPI to Flask migration notes
+16. QUICK_FIX.md (2 KB) - MongoDB connection solution
+17. YOUR_ENV_FILE.md (2 KB) - Your specific MongoDB configuration
+18. TROUBLESHOOTING.md (5 KB) - Connection troubleshooting guide
+19. README.md (13 KB) - Complete API documentation
+20. SUMMARY.md (11 KB) - Project summary and statistics
+21. INDEX.md (5 KB) - File navigation guide
+22. PROJECT_STRUCTURE.md (12 KB) - Architecture and design details
+
+TESTING FILES
+=============
+23. test_api.py (8 KB) - Automated API test script
+24. Wellness_Clinic_API.postman_collection.json (12 KB) - Postman collection
+
+TOTAL SIZE: ~156 KB
+
+QUICK START COMMANDS
+====================
+1. pip install -r requirements.txt
+2. Create .env file with MongoDB credentials
+3. python app.py
+4. Visit http://127.0.0.1:8000/health
+
+KEY FEATURES
+============
+✅ 60+ RESTful API endpoints
+✅ Flask 3.0.0 web framework
+✅ MongoDB Atlas integration
+✅ Complete CRUD operations for all 23 collections
+✅ Auto-incrementing IDs
+✅ Data validation with Pydantic
+✅ CORS enabled
+✅ Comprehensive error handling
+✅ No authentication (as requested)
+✅ Production-ready with Gunicorn support
+
+SUPPORTED COLLECTIONS (23)
+===========================
+- Appointment
+- Delivery
+- Diagnosis
+- Drug
+- Invoice
+- InvoiceLine
+- LabTestOrder
+- Patient
+- Payment
+- PractitionerDailySchedule
+- Prescription
+- Procedure
+- RecoverStay
+- RecoveryObservation
+- Role
+- Staff
+- StaffRole
+- Visit
+- VisitDiagnosis
+- VisitProcedure
+- WeeklyCoverage
+- counters_primary_key_collection
+
+START WITH: START_HERE_FLASK.md

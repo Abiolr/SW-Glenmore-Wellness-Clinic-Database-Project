@@ -13,8 +13,12 @@ class Database:
     def connect_db(cls):
         """Connect to MongoDB database"""
         try:
-            mongodb_url = os.getenv("MONGODB_URL")
-            db_name = os.getenv("MONGODB_DB_NAME")
+            # Support both MONGODB_URL and MONGODB_URI
+            mongodb_url = os.getenv("MONGODB_URL") or os.getenv("MONGODB_URI")
+            db_name = os.getenv("MONGODB_DB_NAME", "wellness_clinic")
+            
+            if not mongodb_url:
+                raise ValueError("MONGODB_URL or MONGODB_URI environment variable is not set")
             
             cls.client = MongoClient(mongodb_url)
             cls.db = cls.client[db_name]
