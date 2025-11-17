@@ -1,7 +1,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import date
-
+import logging
 from clinic_api.database import Database
 from clinic_api.models import *
 from clinic_api.services.patient import PatientCRUD
@@ -9,13 +9,15 @@ from clinic_api.services.staff import StaffCRUD
 from clinic_api.services.appointment import AppointmentCRUD
 from clinic_api.services.visit import VisitCRUD, VisitDiagnosisCRUD, VisitProcedureCRUD
 from clinic_api.services.invoice import InvoiceCRUD, InvoiceLineCRUD, PaymentCRUD
+from clinic_api.services.Views import initialize_views, recreate_all_views, get_database
+from clinic_api.services.stored_procedures import initialize_stored_procedures
 from clinic_api.services.other import (
     DiagnosisCRUD, ProcedureCRUD, DrugCRUD, PrescriptionCRUD,
     LabTestOrderCRUD, DeliveryCRUD, RecoveryStayCRUD, RecoveryObservationCRUD
 )
 
 app = Flask(__name__)
-
+db = get_database()
 # Configure CORS
 CORS(app, resources={r"/*": {"origins": "*"}})
 
@@ -27,6 +29,12 @@ def handle_error(e):
     """Generic error handler"""
     return jsonify({"error": str(e)}), 500
 
+
+
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # ==================== ROOT & HEALTH ROUTES ====================
 
@@ -49,6 +57,154 @@ def health_check():
         return jsonify({"status": "healthy", "database": "connected"})
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 503
+
+# ============================================
+# INITIALIZE VIEWS ON STARTUP (AUTO-CREATE!)
+# ============================================
+logger.info("Initializing MongoDB views...")
+views_manager = initialize_views()
+logger.info("Views initialization complete")
+
+
+# ============================================
+# VIEW ENDPOINTS
+# ============================================
+
+# View 1: Patient Full Details
+@app.route('/api/views/patients/full-details', methods=['GET'])
+def get_patient_full_details():
+    """Get all patients with visit statistics"""
+    try:
+        patients = list(db.patient_full_details.find({}))
+        return jsonify(patients), 200
+    except Exception as e:
+        logger.error(f"Error fetching patient full details: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/views/patients/active', methods=['GET'])
+def get_active_patients():
+    """Get patients with active visits"""
+    try:
+        patients = list(db.patient_full_details.find({'has_active_visits': True}))
+        return jsonify(patients), 200
+    except Exception as e:
+        logger.error(f"Error fetching active patients: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# View 2: Staff Appointments Summary
+@app.route('/api/views/staff/summary', methods=['GET'])
+def get_staff_summary():
+    """Get staff workload summary"""
+    try:
+        active_only = request.args.get('active_only', 'true').lower() == 'true'
+        
+        if active_only:
+            staff = list(db.staff_appointments_summary.find({'active': True}))
+        else:
+            staff = list(db.staff_appointments_summary.find())
+        
+        return jsonify(staff), 200
+    except Exception as e:
+        logger.error(f"Error fetching staff summary: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# View 3: Active Visits Overview
+@app.route('/api/views/visits/active', methods=['GET'])
+def get_active_visits():
+    """Get all currently active visits (not completed)"""
+    try:
+        visits = list(db.active_visits_overview.find())
+        return jsonify(visits), 200
+    except Exception as e:
+        logger.error(f"Error fetching active visits: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# View 4: Invoice Payment Summary
+@app.route('/api/views/invoices/summary', methods=['GET'])
+def get_invoice_summary():
+    """Get invoice overview with payment details"""
+    try:
+        invoices = list(db.invoice_payment_summary.find())
+        return jsonify(invoices), 200
+    except Exception as e:
+        logger.error(f"Error fetching invoice summary: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/views/invoices/unpaid', methods=['GET'])
+def get_unpaid_invoices():
+    """Get invoices that are not fully paid"""
+    try:
+        invoices = list(db.invoice_payment_summary.find({'is_fully_paid': False}))
+        return jsonify(invoices), 200
+    except Exception as e:
+        logger.error(f"Error fetching unpaid invoices: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# View 5: Appointment Calendar View
+@app.route('/api/views/appointments/calendar', methods=['GET'])
+def get_calendar_appointments():
+    """Get appointments formatted for calendar display"""
+    try:
+        appointments = list(db.appointment_calendar_view.find())
+        return jsonify(appointments), 200
+    except Exception as e:
+        logger.error(f"Error fetching calendar appointments: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# Admin: Check views status
+@app.route('/api/views/status', methods=['GET'])
+def get_views_status():
+    """Check status of all MongoDB views"""
+    try:
+        collections = db.list_collection_names()
+        views = [
+            'patient_full_details',
+            'staff_appointments_summary',
+            'active_visits_overview',
+            'invoice_payment_summary',
+            'appointment_calendar_view'
+        ]
+        
+        status = {}
+        for view in views:
+            exists = view in collections
+            count = db[view].count_documents({}) if exists else 0
+            status[view] = {
+                'exists': exists,
+                'document_count': count
+            }
+        
+        return jsonify(status), 200
+    except Exception as e:
+        logger.error(f"Error checking views status: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+# Admin: Force recreate views
+@app.route('/api/views/recreate', methods=['POST'])
+def recreate_views():
+    """Force recreation of all views (admin endpoint)"""
+    try:
+        results = recreate_all_views()  # ← No need to pass db anymore!
+        
+        success_count = sum(1 for v in results.values() if v)
+        
+        return jsonify({
+            'message': f'Recreated {success_count}/{len(results)} views',
+            'results': results
+        }), 200
+    except Exception as e:
+        logger.error(f"Error recreating views: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 
 
 # ==================== PATIENT ROUTES ====================
