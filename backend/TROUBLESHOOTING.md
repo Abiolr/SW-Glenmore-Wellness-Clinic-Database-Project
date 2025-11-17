@@ -121,10 +121,10 @@ print(f"Attempting to connect to: {mongodb_url[:20]}...")
 try:
     client = MongoClient(mongodb_url)
     client.admin.command('ping')
-    print("✅ Successfully connected to MongoDB!")
+    print("Successfully connected to MongoDB!")
     print(f"Database: {os.getenv('MONGODB_DB_NAME')}")
 except Exception as e:
-    print(f"❌ Connection failed: {e}")
+    print(f"Connection failed: {e}")
 ```
 
 Save as `test_connection.py` and run:
