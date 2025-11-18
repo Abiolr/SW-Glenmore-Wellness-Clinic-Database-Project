@@ -286,12 +286,13 @@ class Delivery(DeliveryBase):
         from_attributes = True
 
 
-# RecoveryStay Model (corrected from RecovertStay)
+# RecoveryStay Model (Updated with Discharged By)
 class RecoveryStayBase(BaseModel):
     stay_id: Optional[int] = None
     patient_id: int
     admit_time: datetime
     discharge_time: Optional[datetime] = None
+    discharged_by: Optional[int] = None  # Staff ID of practitioner signing off
 
 class RecoveryStayCreate(RecoveryStayBase):
     pass
@@ -320,12 +321,33 @@ class RecoveryObservation(RecoveryObservationBase):
         from_attributes = True
 
 
-# Invoice Model
+# Insurer Model (NEW)
+class InsurerBase(BaseModel):
+    insurer_id: Optional[int] = None
+    company_name: str
+    phone: str
+    address: Optional[str] = None
+    electronic_id: str  # ID for electronic billing
+
+class InsurerCreate(InsurerBase):
+    pass
+
+class Insurer(InsurerBase):
+    insurer_id: int
+    class Config:
+        from_attributes = True
+
+
+# Invoice Model (Updated with Insurance Logic)
 class InvoiceBase(BaseModel):
     invoice_id: Optional[int] = None
     patient_id: int
+    insurer_id: Optional[int] = None  # Link to Insurer if applicable
     invoice_date: date
-    status: str  # "pending", "paid", "partial"
+    total_amount: float
+    insurance_portion: float = 0.0    # Amount billed to insurance
+    patient_portion: float = 0.0      # Co-pay or full amount
+    status: str = "pending"  # "pending", "paid", "partial", "submitted_to_insurance"
 
 class InvoiceCreate(InvoiceBase):
     pass
@@ -370,5 +392,49 @@ class PaymentCreate(PaymentBase):
 class Payment(PaymentBase):
     payment_id: int
     
+    class Config:
+        from_attributes = True
+
+
+# StaffAssignment Model (Weekly Coverage)
+class StaffAssignmentBase(BaseModel):
+    assignment_id: Optional[int] = None
+    date: date
+    staff_name: str
+    on_call_start: str  # Storing as string "HH:MM" to match requirements
+    on_call_end: str    # Storing as string "HH:MM"
+    phone_number: str
+
+class StaffAssignmentCreate(StaffAssignmentBase):
+    pass
+
+class StaffAssignmentUpdate(BaseModel):
+    date: Optional[date] = None
+    staff_name: Optional[str] = None
+    on_call_start: Optional[str] = None
+    on_call_end: Optional[str] = None
+    phone_number: Optional[str] = None
+
+class StaffAssignment(StaffAssignmentBase):
+    assignment_id: int
+    
+    class Config:
+        from_attributes = True
+
+
+# StaffShift Model (NEW - Daily Master Schedule)
+class StaffShiftBase(BaseModel):
+    shift_id: Optional[int] = None
+    staff_id: int
+    date: date
+    start_time: datetime
+    end_time: datetime
+    role_for_shift: str # e.g., "Walk-in MD", "On-Call Midwife"
+
+class StaffShiftCreate(StaffShiftBase):
+    pass
+
+class StaffShift(StaffShiftBase):
+    shift_id: int
     class Config:
         from_attributes = True

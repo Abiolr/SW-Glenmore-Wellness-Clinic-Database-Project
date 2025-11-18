@@ -1,3 +1,5 @@
+import pytest
+
 # --- Diagnosis ---
 
 def test_get_diagnoses(client):
@@ -26,23 +28,17 @@ def test_get_procedure_not_found(client):
 
 def test_get_drugs(client):
     response = client.get('/drugs')
-    # NOTE: This test will still fail with a 500 error if 
-    # the models.py fix is not correct or if the data
-    # already in your database doesn't match the model.
     assert response.status_code == 200
 
 def test_create_drug_bad_request(client):
     """Test POST /drugs with missing required fields."""
     response = client.post('/drugs', json={
         "generic_name": "Test-o-mol"
-        # Missing brand_name and strength_form, which are required
     })
-    # Expect 400 Bad Request due to validation error
     assert response.status_code == 400
 
 def test_create_drug_success(client):
     """Test POST /drugs with correct fields."""
-    # This test provides the "required args" you mentioned.
     drug_data = {
         "brand_name": "Test-Brand",
         "strength_form": "100mg tablet",
@@ -55,9 +51,6 @@ def test_create_drug_success(client):
     
     # Optionally, check if the returned data matches
     assert response.json["brand_name"] == "Test-Brand"
-    
-    # Note: Running this test repeatedly will create duplicate
-    # entries in your database.
 
 def test_get_drug_not_found(client):
     response = client.get('/drugs/99999')

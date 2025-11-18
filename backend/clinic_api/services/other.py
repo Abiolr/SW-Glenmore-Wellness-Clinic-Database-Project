@@ -260,7 +260,7 @@ class DeliveryCRUD:
 
 
 class RecoveryStayCRUD:
-    collection_name = "RecoverStay"
+    collection_name = "RecoveryStay"
     
     @classmethod
     def create(cls, recovery_stay: RecoveryStayCreate) -> RecoveryStay:

@@ -158,19 +158,51 @@ class PaymentCRUD:
     
     @classmethod
     def create(cls, payment: PaymentCreate) -> Payment:
-        """Create a new payment"""
+        """Create a new payment and TRIGGER invoice status update"""
         collection = Database.get_collection(cls.collection_name)
         
-        # Get next payment ID
+        # 1. Create Payment
         payment_id = Database.get_next_sequence("payment_id")
-        
         payment_dict = payment.model_dump()
         payment_dict["payment_id"] = payment_id
         payment_dict["payment_date"] = payment_dict["payment_date"].isoformat()
         
         collection.insert_one(payment_dict)
         
+        # 2. TRIGGER LOGIC: Check Invoice Balance
+        if payment.invoice_id:
+            cls.check_and_update_invoice_status(payment.invoice_id)
+            
         return Payment(**payment_dict)
+
+    @classmethod
+    def check_and_update_invoice_status(cls, invoice_id: int):
+        """Simulates a DB Trigger to update status based on balance"""
+        inv_collection = Database.get_collection("Invoice")
+        pay_collection = Database.get_collection("Payment")
+        
+        invoice = inv_collection.find_one({"invoice_id": invoice_id})
+        if not invoice:
+            return
+
+        # Calculate total paid
+        payments = pay_collection.find({"invoice_id": invoice_id})
+        total_paid = sum(p["amount"] for p in payments)
+        
+        # Determine target total (patient portion usually)
+        target_amount = invoice.get("patient_portion", invoice.get("total_amount", 0))
+        
+        new_status = invoice["status"]
+        if total_paid >= target_amount:
+            new_status = "paid"
+        elif total_paid > 0:
+            new_status = "partial"
+            
+        if new_status != invoice["status"]:
+            inv_collection.update_one(
+                {"invoice_id": invoice_id},
+                {"$set": {"status": new_status}}
+            )
     
     @classmethod
     def get(cls, payment_id: int) -> Optional[Payment]:

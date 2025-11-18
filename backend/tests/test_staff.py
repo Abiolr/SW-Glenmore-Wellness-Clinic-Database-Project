@@ -1,3 +1,18 @@
+def test_create_staff(client):
+    """Test POST /staff"""
+    staff_data = {
+        "first_name": "Dr. Alice",
+        "last_name": "Johnson",
+        "email": "alice.johnson@clinic.com",
+        "phone": "483-555-0101"
+    }
+    response = client.post('/staff', json=staff_data)
+    assert response.status_code == 201
+    data = response.json
+    assert data["first_name"] == "Dr. Alice"
+    assert data["email"] == "alice.johnson@clinic.com"
+    assert "staff_id" in data
+
 def test_get_staff(client):
     """Test GET /staff endpoint."""
     response = client.get('/staff')

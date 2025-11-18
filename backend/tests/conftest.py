@@ -1,13 +1,19 @@
 import pytest
 import sys
 import os
+from bson import ObjectId
+import json
 
 # Add the root directory to the Python path
-# This assumes 'app.py' is in the directory above 'tests/'
-# If 'app.py' is in the same directory as the 'tests/' folder, use os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Now we can import the app
+# Custom JSON encoder for ObjectId
+class JSONEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, ObjectId):
+            return str(o)
+        return json.JSONEncoder.default(self, o)
+
 try:
     from app import app as flask_app
 except ImportError:
@@ -20,6 +26,10 @@ def app():
     flask_app.config['TESTING'] = True
     # You might want to configure a separate test database here
     # For example: flask_app.config['DATABASE_URI'] = 'mongodb://localhost:27017/test_clinic_db'
+    
+    # Set custom JSON encoder if needed
+    if not hasattr(flask_app, 'json_encoder'):
+        flask_app.json_encoder = JSONEncoder
     
     with flask_app.app_context():
         # This will use the app context created by the fixture
