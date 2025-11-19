@@ -10,7 +10,7 @@ from clinic_api.services.appointment import AppointmentCRUD
 from clinic_api.services.visit import VisitCRUD, VisitDiagnosisCRUD, VisitProcedureCRUD
 from clinic_api.services.invoice import InvoiceCRUD, InvoiceLineCRUD, PaymentCRUD
 from clinic_api.services.Views import initialize_views, recreate_all_views, get_database
-from clinic_api.services.stored_procedures import initialize_stored_procedures
+from backend.clinic_api.services.stored_procedures_aggregation import initialize_aggregation_functions, agg_functions
 from clinic_api.services.other import (
     DiagnosisCRUD, ProcedureCRUD, DrugCRUD, PrescriptionCRUD,
     LabTestOrderCRUD, DeliveryCRUD, RecoveryStayCRUD, RecoveryObservationCRUD
@@ -204,20 +204,57 @@ def recreate_views():
         return jsonify({'error': str(e)}), 500
 
 # ============================================
-# Stored Procedures ENDPOINTS
+# Stored Procedure ENDPOINTS
 # ============================================
 
-functions_manager = initialize_stored_procedures()
+functions = initialize_aggregation_functions()
 
-@app.route('/api/functions/patient-age/<date_of_birth>')
-def calculate_patient_age(date_of_birth):
-    result = db.command('eval', f'calculatePatientAge("{date_of_birth}")')
-    return jsonify({'age': result['retval']})
+@app.route('/api/invoices/<int:invoice_id>/summary', methods=['GET'])
+def get_invoice_summary_endpoint(invoice_id):
+    """
+    Get complete invoice summary with line items in ONE query
+    
+    Usage:
+    GET http://localhost:8000/api/invoices/1/summary
+    
+    Response:
+    {
+      "invoice_id": 1,
+      "invoice_date": "2024-01-15",
+      "status": "paid",
+      "patient_id": 1,
+      "total_amount": 250.50,
+      "line_count": 5,
+      "items": [
+        {
+          "description": "Consultation",
+          "qty": 1,
+          "unit_price": 100.00,
+          "line_total": 100.00
+        },
+        {
+          "description": "Lab Test",
+          "qty": 3,
+          "unit_price": 50.00,
+          "line_total": 150.00
+        }
+      ]
+    }
+    """
+    try:
+        # This ONE function gets invoice + all line items in one query!
+        summary = agg_functions.get_invoice_summary(invoice_id)
+        
+        if not summary:
+            return jsonify({'error': 'Invoice not found'}), 404
+        
+        return jsonify(summary), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting invoice summary: {e}")
+        return jsonify({'error': str(e)}), 500
 
-@app.route('/api/functions/patient-visits/<int:patient_id>')
-def get_patient_visits(patient_id):
-    result = db.command('eval', f'getPatientVisitCount({patient_id})')
-    return jsonify({'visit_count': result['retval']})
+
   
 # ==================== PATIENT ROUTES ====================
 @app.route('/patients', methods=['POST'])

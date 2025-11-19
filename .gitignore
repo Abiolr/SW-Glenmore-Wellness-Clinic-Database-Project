@@ -1,7 +1,7 @@
 # Ignore environment files
 .env
 backend/.env
-
+backend/clinic_api/.env
 # Python
 __pycache__/
 *.py[cod]
