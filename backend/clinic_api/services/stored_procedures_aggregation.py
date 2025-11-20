@@ -21,7 +21,7 @@ class AggregationFunctions:
         Initialize AggregationFunctions
         Uses Database.connect_db() to get database connection
         """
-        from database import Database
+        from clinic_api.database import Database
         
         self.db = Database.connect_db()
         logger.info("Aggregation pipeline functions initialized (MongoDB Atlas compatible)")

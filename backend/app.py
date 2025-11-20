@@ -10,7 +10,7 @@ from clinic_api.services.appointment import AppointmentCRUD
 from clinic_api.services.visit import VisitCRUD, VisitDiagnosisCRUD, VisitProcedureCRUD
 from clinic_api.services.invoice import InvoiceCRUD, InvoiceLineCRUD, PaymentCRUD
 from clinic_api.services.Views import initialize_views, recreate_all_views, get_database
-from backend.clinic_api.services.stored_procedures_aggregation import initialize_aggregation_functions, agg_functions
+from clinic_api.services.stored_procedures_aggregation import initialize_aggregation_functions, agg_functions
 from clinic_api.services.other import (
     DiagnosisCRUD, ProcedureCRUD, DrugCRUD, PrescriptionCRUD,
     LabTestOrderCRUD, DeliveryCRUD, RecoveryStayCRUD, RecoveryObservationCRUD
