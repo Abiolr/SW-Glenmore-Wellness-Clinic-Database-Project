@@ -1,5 +1,15 @@
 import React from 'react'
 
-export default function LogEntry({ text }: { text?: string }){
-  return <div style={{ padding: 8, borderBottom: '1px solid #f3f4f6' }}>{text}</div>
+interface Props {
+  label: string
+  value: string | number
+}
+
+export default function LogEntry({ label, value }: Props) {
+  return (
+    <tr>
+      <td style={{ fontWeight: 'bold' }}>{label}</td>
+      <td>{value}</td>
+    </tr>
+  )
 }

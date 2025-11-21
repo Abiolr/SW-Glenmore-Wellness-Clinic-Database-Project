@@ -128,7 +128,16 @@ export interface FunctionsTestResponse {
  * @param dateOfBirth - Date in format "YYYY-MM-DD"
  */
 export const calculatePatientAge = async (dateOfBirth: string): Promise<PatientAgeResponse> => {
-  return get<PatientAgeResponse>(`/api/functions/patient-age/${dateOfBirth}`);
+  // Calculate age in the frontend to avoid calling MongoDB stored JS
+  const dob = new Date(dateOfBirth);
+  if (isNaN(dob.getTime())) throw new Error('Invalid date');
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return { date_of_birth: dateOfBirth, age };
 };
 
 /**
@@ -148,7 +157,9 @@ export const getPatientAge = async (patientId: number): Promise<PatientAgeWithDe
  * @param patientId - Patient ID
  */
 export const getPatientVisitCount = async (patientId: number): Promise<PatientVisitCountResponse> => {
-  return get<PatientVisitCountResponse>(`/api/functions/patient-visits/${patientId}`);
+  // Backend provides appointments by patient; count them client-side
+  const appointments = await get<any[]>(`/appointments/patient/${patientId}`);
+  return { patient_id: patientId, visit_count: Array.isArray(appointments) ? appointments.length : 0 };
 };
 
 /**
@@ -168,7 +179,11 @@ export const getPatientStats = async (patientId: number): Promise<PatientStatsRe
  * @param invoiceId - Invoice ID
  */
 export const calculateInvoiceTotal = async (invoiceId: number): Promise<InvoiceTotalResponse> => {
-  return get<InvoiceTotalResponse>(`/api/functions/invoice-total/${invoiceId}`);
+  // Backend does not currently expose /api/functions/invoice-total;
+  // compute total from invoice line items via existing invoice lines endpoint.
+  const lines = await get<any[]>(`/invoices/${invoiceId}/lines`);
+  const total = lines.reduce((sum, l) => sum + ((l.qty || 0) * (l.unit_price || 0)), 0);
+  return { invoice_id: invoiceId, total };
 };
 
 /**
@@ -176,7 +191,21 @@ export const calculateInvoiceTotal = async (invoiceId: number): Promise<InvoiceT
  * @param invoiceId - Invoice ID
  */
 export const getInvoiceCalculatedTotal = async (invoiceId: number): Promise<InvoiceCalculatedTotalResponse> => {
-  return get<InvoiceCalculatedTotalResponse>(`/api/invoices/${invoiceId}/calculated-total`);
+  // Backend exposes invoice and invoice lines endpoints. Build the
+  // calculated-total response by fetching both and computing the total.
+  const invoice = await get<any>(`/invoices/${invoiceId}`);
+  const lines = await get<any[]>(`/invoices/${invoiceId}/lines`);
+
+  const calculated_total = lines.reduce((sum, l) => sum + ((l.qty || 0) * (l.unit_price || 0)), 0);
+  const line_items_count = lines.length;
+
+  return {
+    invoice_id: invoice.invoice_id ?? invoiceId,
+    invoice_date: invoice.invoice_date ?? invoice.created_at ?? '',
+    status: invoice.status ?? 'unknown',
+    calculated_total,
+    line_items_count,
+  };
 };
 
 // ============================================
@@ -188,7 +217,9 @@ export const getInvoiceCalculatedTotal = async (invoiceId: number): Promise<Invo
  * @param staffId - Staff ID
  */
 export const getStaffAppointmentCount = async (staffId: number): Promise<StaffAppointmentCountResponse> => {
-  return get<StaffAppointmentCountResponse>(`/api/functions/staff-appointments/${staffId}`);
+  // Use appointments by staff endpoint and count client-side
+  const appointments = await get<any[]>(`/appointments/staff/${staffId}`);
+  return { staff_id: staffId, appointment_count: Array.isArray(appointments) ? appointments.length : 0 };
 };
 
 /**
@@ -210,7 +241,25 @@ export const getStaffStats = async (staffId: number): Promise<StaffStatsResponse
 export const checkAppointmentAvailability = async (
   data: AppointmentAvailabilityRequest
 ): Promise<AppointmentAvailabilityResponse> => {
-  return post<AppointmentAvailabilityResponse>('/api/functions/check-availability', data);
+  // Perform availability check client-side by fetching staff appointments
+  const { staff_id, start_time, end_time } = data;
+  const appts = await get<any[]>(`/appointments/staff/${staff_id}`);
+  const start = new Date(start_time);
+  const end = new Date(end_time);
+
+  const overlaps = (appts || []).some((a) => {
+    const aStart = new Date(a.scheduled_start);
+    const aEnd = new Date(a.scheduled_end);
+    return (start < aEnd && end > aStart);
+  });
+
+  return {
+    staff_id,
+    start_time,
+    end_time,
+    available: !overlaps,
+    message: overlaps ? 'Time slot conflicts with existing appointment' : 'Available'
+  };
 };
 
 /**
@@ -223,6 +272,158 @@ export const validateAppointment = async (
   return post<AppointmentValidationResponse>('/api/appointments/validate', data);
 };
 
+export interface DeliveryResponse {
+  id: number;
+  patient_id: number;
+  practitioner_id: number;
+  delivery_date: string;
+  notes: string;
+}
+
+export const getDeliveryByVisit = async (visitId: number): Promise<DeliveryResponse> => {
+  return get<DeliveryResponse>(`/deliveries/visit/${visitId}`);
+};
+
+
+export interface LabTestResponse {
+  id: number;
+  visit_id: number;
+  test_name: string;
+  result: string;
+  practitioner_id: number;
+  ordered_date: string;
+}
+
+export const getLabTestsByVisit = async (visitId: number): Promise<LabTestResponse[]> => {
+  return get<LabTestResponse[]>(`/lab-tests/visit/${visitId}`);
+};
+
+
+export interface RecoveryStayResponse {
+  stay_id: number;
+  patient_id: number;
+  admit_time: string;
+  discharge_time?: string | null;
+  discharged_by?: number | null;
+}
+
+export const getRecoveryStay = async (stayId: number): Promise<RecoveryStayResponse> => {
+  return get<RecoveryStayResponse>(`/recovery-stays/${stayId}`);
+};
+
+
+export interface RecoveryObservationResponse {
+  stay_id: number;
+  text_on: string;
+  observed_at?: string | null;
+  notes: string;
+}
+
+export const createRecoveryObservation = async (data: {
+  stay_id: number;
+  // Accept either `text_on` (preferred) or `observation_time` and map it
+  text_on?: string;
+  observation_time?: string;
+  notes: string;
+}): Promise<RecoveryObservationResponse> => {
+  const payload: any = {
+    stay_id: data.stay_id,
+    notes: data.notes,
+  };
+  // prefer text_on if provided, otherwise map observation_time -> text_on
+  payload.text_on = data.text_on ?? data.observation_time ?? new Date().toISOString();
+  return post<RecoveryObservationResponse>('/recovery-observations', payload);
+};
+
+/**
+ * Update a recovery stay (used for discharge/sign-off)
+ */
+export const updateRecoveryStay = async (stayId: number, data: any): Promise<RecoveryStayResponse> => {
+  return fetch(`${import.meta.env.VITE_API_URL || ''}/recovery-stays/${stayId}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data)
+  }).then((r) => {
+    if (!r.ok) throw new Error('Failed to update stay');
+    return r.json();
+  });
+};
+
+/**
+ * Create a recovery stay
+ */
+export const createRecoveryStay = async (data: any): Promise<any> => {
+  return post<any>('/recovery-stays', data);
+};
+
+/**
+ * Get observations for a recovery stay
+ */
+export const getRecoveryObservationsByStay = async (stayId: number): Promise<RecoveryObservationResponse[]> => {
+  return get<RecoveryObservationResponse[]>(`/recovery-observations/stay/${stayId}`);
+};
+
+/**
+ * Create lab test
+ */
+export const createLabTest = async (data: any): Promise<any> => {
+  return post<any>('/lab-tests', data);
+};
+
+// ============================================
+// Additional Billing & CRUD Wrappers
+// ============================================
+
+/**
+ * Get aggregated invoice summary (server-side aggregation)
+ */
+export const getInvoiceAggregation = async (invoiceId: number): Promise<any> => {
+  return get<any>(`/api/invoices/${invoiceId}/summary`);
+};
+
+/**
+ * Insurer CRUD
+ */
+export const getInsurers = async (): Promise<any[]> => {
+  return get<any[]>('/insurers');
+};
+
+export const createInsurer = async (data: any): Promise<any> => {
+  return post<any>('/insurers', data);
+};
+
+/**
+ * Prescriptions
+ */
+export const getPrescriptionsByVisit = async (visitId: number): Promise<any[]> => {
+  return get<any[]>(`/prescriptions/visit/${visitId}`);
+};
+
+export const createPrescription = async (data: any): Promise<any> => {
+  return post<any>('/prescriptions', data);
+};
+
+export const getPrescriptionDetails = async (prescriptionId: number): Promise<any> => {
+  return get<any>(`/prescriptions/${prescriptionId}/details`);
+};
+
+/**
+ * Drugs lookup
+ */
+export const getDrugs = async (): Promise<any[]> => {
+  return get<any[]>('/drugs');
+};
+
+/**
+ * Delivery create
+ */
+export const createDelivery = async (data: any): Promise<any> => {
+  return post<any>('/deliveries', data);
+};
+
+
+
+
 // ============================================
 // ADMIN: FUNCTIONS MANAGEMENT
 // ============================================
@@ -231,14 +432,24 @@ export const validateAppointment = async (
  * List all stored functions in the database
  */
 export const listStoredFunctions = async (): Promise<FunctionsListResponse> => {
-  return get<FunctionsListResponse>('/api/functions/list');
+  // Listing stored JS functions is not supported on Atlas (frontend-only fallback)
+  return Promise.reject(new Error('Listing stored functions is not supported in frontend-only mode'));
 };
 
 /**
  * Check status of all expected stored functions
  */
 export const getFunctionsStatus = async (): Promise<FunctionsStatusResponse> => {
-  return get<FunctionsStatusResponse>('/api/functions/status');
+  // Use system status endpoint as a best-effort substitute
+  try {
+    const sys = await get<any>('/health');
+    return {
+      all_functions_exist: !!sys.stored_functions?.all_exist,
+      functions: {},
+    } as FunctionsStatusResponse;
+  } catch (e) {
+    return Promise.reject(new Error('Functions status not available'));
+  }
 };
 
 /**
@@ -248,14 +459,14 @@ export const recreateAllFunctions = async (): Promise<{
   message: string;
   results: Record<string, boolean>;
 }> => {
-  return post('/api/functions/recreate');
+  return Promise.reject(new Error('Recreating stored JS functions is not supported from the frontend'));
 };
 
 /**
  * Test all stored functions with sample data
  */
 export const testAllFunctions = async (): Promise<FunctionsTestResponse> => {
-  return get<FunctionsTestResponse>('/api/functions/test');
+  return Promise.reject(new Error('Testing stored JS functions is not supported from the frontend'));
 };
 
 /**
@@ -264,7 +475,8 @@ export const testAllFunctions = async (): Promise<FunctionsTestResponse> => {
  * @param payload - Optional payload
  */
 export const callFunction = async (name: string, payload?: any): Promise<any> => {
-  return post(`/api/functions/${name}`, payload);
+  // Generic function invocations are unsupported in frontend-only mode
+  return Promise.reject(new Error('Calling arbitrary stored functions is not supported in frontend-only mode'));
 };
 
 // ============================================

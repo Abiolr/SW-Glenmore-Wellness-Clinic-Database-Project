@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from datetime import date
 import logging
+import traceback
 from clinic_api.database import Database
 from clinic_api.models import *
 from clinic_api.services.patient import PatientCRUD
@@ -10,13 +11,13 @@ from clinic_api.services.appointment import AppointmentCRUD
 from clinic_api.services.visit import VisitCRUD, VisitDiagnosisCRUD, VisitProcedureCRUD
 from clinic_api.services.invoice import InvoiceCRUD, InvoiceLineCRUD, PaymentCRUD
 from clinic_api.services.Views import initialize_views, recreate_all_views, get_database
-from backend.clinic_api.services.stored_procedures_aggregation import initialize_aggregation_functions, agg_functions
+from clinic_api.services.stored_procedures_aggregation import initialize_aggregation_functions, agg_functions
 from clinic_api.services.other import (
     DiagnosisCRUD, ProcedureCRUD, DrugCRUD, PrescriptionCRUD,
     LabTestOrderCRUD, DeliveryCRUD, RecoveryStayCRUD, RecoveryObservationCRUD
 )
 from clinic_api.services.weekly_coverage import StaffAssignmentCRUD
-from clinic_api.services.reports import ReportService
+from clinic_api.services.reports import ReportService, _sanitize_for_json
 from clinic_api.services.scheduling import StaffShiftCRUD, StaffShiftCreate
 from clinic_api.services.billing import InsurerCRUD, InsurerCreate
 
@@ -57,12 +58,64 @@ def health_check():
     except Exception as e:
         return jsonify({"status": "unhealthy", "error": str(e)}), 503
 
+
+@app.route('/connect', methods=['GET', 'POST'])
+def connect_with_token():
+    """Safe token-based connect endpoint.
+
+    Expects a token either as query parameter `?token=...` or in JSON body { token: '...' }.
+    This endpoint will try to locate the token in common token/session collections and
+    return a friendly error instead of raising a 500 when the DB query fails or the
+    token is missing.
+    """
+    try:
+        # Get token from query or JSON body
+        token = request.args.get('token')
+        if not token and request.is_json:
+            token = request.get_json(silent=True) and request.get_json().get('token')
+
+        if not token:
+            return jsonify({'error': 'token parameter required'}), 400
+
+        # Try common token collection names (adjust if your project uses a different name)
+        candidate_collections = ['auth_tokens', 'tokens', 'sessions', 'api_tokens']
+        found = None
+        for coll_name in candidate_collections:
+            if coll_name in db.list_collection_names():
+                doc = db[coll_name].find_one({'token': token}, {'_id': 0})
+                if doc:
+                    found = {'collection': coll_name, 'document': doc}
+                    break
+
+        # If not found, try a more general lookup across 'users' or 'sessions' by token key
+        if not found:
+            # Example: some apps store tokens on the user document under 'api_token' or similar
+            if 'users' in db.list_collection_names():
+                user_doc = db['users'].find_one({'api_token': token}, {'_id': 0})
+                if user_doc:
+                    found = {'collection': 'users', 'document': user_doc}
+
+        if not found:
+            return jsonify({'error': 'token not found'}), 404
+
+        return jsonify({'status': 'ok', 'source': found['collection'], 'data': found['document']}), 200
+
+    except Exception as e:
+        # Log exception and return safe error response instead of crashing
+        logger.exception('Error in /connect endpoint')
+        return jsonify({'error': 'internal server error', 'detail': str(e)}), 500
+
+
 # ============================================
 # INITIALIZE VIEWS ON STARTUP (AUTO-CREATE!)
 # ============================================
 logger.info("Initializing MongoDB views...")
-views_manager = initialize_views()
-logger.info("Views initialization complete")
+try:
+    views_manager = initialize_views()
+    logger.info("Views initialization complete")
+except Exception:
+    logger.exception("Failed to initialize MongoDB views; continuing without pre-created views")
+    views_manager = None
 
 
 # ============================================
@@ -207,7 +260,14 @@ def recreate_views():
 # Stored Procedure ENDPOINTS
 # ============================================
 
-functions = initialize_aggregation_functions()
+try:
+    functions = initialize_aggregation_functions()
+    aggregation_ready = True
+    logger.info("Aggregation functions initialized")
+except Exception:
+    logger.exception("Failed to initialize aggregation functions; stored aggregation endpoints may be unavailable")
+    functions = None
+    aggregation_ready = False
 
 @app.route('/api/invoices/<int:invoice_id>/summary', methods=['GET'])
 def get_invoice_summary_endpoint(invoice_id):
@@ -241,15 +301,19 @@ def get_invoice_summary_endpoint(invoice_id):
       ]
     }
     """
+    # If aggregation functions failed to initialize, return 503
+    if not globals().get('aggregation_ready', False):
+        return jsonify({'error': 'aggregation functions not available', 'detail': 'server initialization incomplete'}), 503
+
     try:
         # This ONE function gets invoice + all line items in one query!
         summary = agg_functions.get_invoice_summary(invoice_id)
-        
+
         if not summary:
             return jsonify({'error': 'Invoice not found'}), 404
-        
+
         return jsonify(summary), 200
-        
+
     except Exception as e:
         logger.error(f"Error getting invoice summary: {e}")
         return jsonify({'error': str(e)}), 500
@@ -699,6 +763,141 @@ def get_prescriptions_by_visit(visit_id):
     prescriptions = PrescriptionCRUD.get_by_visit(visit_id)
     return jsonify([p.model_dump(mode='json') for p in prescriptions])
 
+@app.route('/prescriptions/all', methods=['GET'])
+def get_all_prescriptions():
+    """Get all prescriptions with basic patient and drug info for dropdown"""
+    try:
+        from clinic_api.services.reports import _sanitize_for_json
+        
+        db = Database.connect_db()
+        
+        # Get all prescriptions and manually join with patient/drug data
+        prescriptions = list(db.Prescription.find({}, {"_id": 0}).sort("Prescription_Id", -1).limit(100))
+        
+        result = []
+        seen_ids = set()
+        
+        for rx in prescriptions:
+            rx_id = rx.get("Prescription_Id") or rx.get("prescription_id")
+            
+            # Skip duplicates
+            if rx_id in seen_ids:
+                continue
+            seen_ids.add(rx_id)
+            
+            patient_id = rx.get("Patient_Id") or rx.get("patient_id")
+            drug_id = rx.get("Drug_Id") or rx.get("drug_id")
+            
+            # Get patient name
+            patient_name = "Unknown Patient"
+            if patient_id:
+                patient = db.Patient.find_one(
+                    {"$or": [{"Patient_Id": patient_id}, {"patient_id": patient_id}]},
+                    {"First_Name": 1, "Last_Name": 1, "first_name": 1, "last_name": 1, "_id": 0}
+                )
+                if patient:
+                    first = patient.get("First_Name") or patient.get("first_name") or ""
+                    last = patient.get("Last_Name") or patient.get("last_name") or ""
+                    patient_name = f"{first} {last}".strip()
+            
+            # Get drug name
+            drug_name = "Unknown Drug"
+            if drug_id:
+                drug = db.Drug.find_one(
+                    {"$or": [{"Drug_Id": drug_id}, {"drug_id": drug_id}]},
+                    {"Brand_Name": 1, "brand_name": 1, "_id": 0}
+                )
+                if drug:
+                    drug_name = drug.get("Brand_Name") or drug.get("brand_name") or "Unknown Drug"
+            
+            result.append({
+                "prescription_id": rx_id,
+                "patient_name": patient_name,
+                "drug_name": drug_name,
+                "dosage": rx.get("Dosage_Instruction") or rx.get("dosage") or rx.get("Dosage") or "",
+                "dispensed_at": rx.get("Dispensed_At") or rx.get("dispensed_at")
+            })
+        
+        return jsonify(_sanitize_for_json(result))
+    except Exception as e:
+        logger.exception('Error fetching all prescriptions')
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/prescriptions/<int:prescription_id>/details', methods=['GET'])
+def get_prescription_details(prescription_id):
+    """Get enriched prescription details with patient, drug, visit, and staff info"""
+    try:
+        from clinic_api.services.reports import _sanitize_for_json
+        
+        db = Database.connect_db()
+        
+        # Get prescription - try both field name variations
+        prescription = db.Prescription.find_one({"prescription_id": prescription_id})
+        if not prescription:
+            prescription = db.Prescription.find_one({"Prescription_Id": prescription_id})
+        if not prescription:
+            return jsonify({"error": "Prescription not found"}), 404
+        
+        # Normalize field names (handle both lowercase and capitalized versions)
+        def get_field(doc, field_name):
+            if not doc:
+                return None
+            # Try lowercase with underscore
+            if field_name in doc:
+                return doc[field_name]
+            # Try capitalized with underscore
+            capitalized = field_name.replace('_', '_').title().replace('_', '_')
+            if capitalized in doc:
+                return doc[capitalized]
+            # Try each word capitalized
+            parts = field_name.split('_')
+            cap_field = '_'.join([p.capitalize() for p in parts])
+            if cap_field in doc:
+                return doc[cap_field]
+            return None
+        
+        # Extract IDs with field name tolerance
+        visit_id = get_field(prescription, 'visit_id') or get_field(prescription, 'Visit_Id')
+        drug_id = get_field(prescription, 'drug_id') or get_field(prescription, 'Drug_Id')
+        patient_id = get_field(prescription, 'patient_id') or get_field(prescription, 'Patient_Id')
+        dispensed_by_id = get_field(prescription, 'dispensed_by') or get_field(prescription, 'Dispensed_By')
+        
+        # Get related data
+        patient = None
+        if patient_id:
+            patient = db.Patient.find_one({"patient_id": patient_id}) or db.Patient.find_one({"Patient_Id": patient_id})
+        
+        drug = None
+        if drug_id:
+            drug = db.Drug.find_one({"drug_id": drug_id}) or db.Drug.find_one({"Drug_Id": drug_id})
+        
+        visit = None
+        if visit_id:
+            visit = db.Visit.find_one({"visit_id": visit_id}) or db.Visit.find_one({"Visit_Id": visit_id})
+        
+        dispensed_by = None
+        if dispensed_by_id:
+            dispensed_by = db.Staff.find_one({"staff_id": dispensed_by_id}) or db.Staff.find_one({"Staff_Id": dispensed_by_id})
+        
+        # If we don't have a patient yet, try to get it from visit
+        if not patient and visit:
+            visit_patient_id = get_field(visit, 'patient_id') or get_field(visit, 'Patient_Id')
+            if visit_patient_id:
+                patient = db.Patient.find_one({"patient_id": visit_patient_id}) or db.Patient.find_one({"Patient_Id": visit_patient_id})
+        
+        result = {
+            "prescription": _sanitize_for_json(prescription),
+            "patient": _sanitize_for_json(patient),
+            "drug": _sanitize_for_json(drug),
+            "visit": _sanitize_for_json(visit),
+            "dispensed_by": _sanitize_for_json(dispensed_by)
+        }
+        
+        return jsonify(result)
+    except Exception as e:
+        logger.exception('Error fetching prescription details')
+        return jsonify({"error": str(e)}), 500
+
 # ==================== LAB TEST ORDER ROUTES ====================
 @app.route('/lab-tests', methods=['POST'])
 def create_lab_test():
@@ -725,6 +924,29 @@ def get_lab_tests_by_visit(visit_id):
     lab_tests = LabTestOrderCRUD.get_by_visit(visit_id)
     return jsonify([lt.model_dump(mode='json') for lt in lab_tests])
 
+
+@app.route('/lab-tests/date/<date_str>', methods=['GET'])
+def get_lab_tests_by_date(date_str):
+    """Get lab tests (results) for a specific date (YYYY-MM-DD). Returns normalized dicts."""
+    try:
+        results = LabTestOrderCRUD.get_by_date(date_str)
+        return jsonify(results)
+    except Exception as e:
+        logger.exception('Error fetching lab tests by date')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/lab-tests/today', methods=['GET'])
+def get_lab_tests_today():
+    """Convenience endpoint to fetch lab test results for today"""
+    try:
+        today = date.today().isoformat()
+        results = LabTestOrderCRUD.get_by_date(today)
+        return jsonify(results)
+    except Exception as e:
+        logger.exception('Error fetching today lab tests')
+        return jsonify({'error': str(e)}), 500
+
 # ==================== DELIVERY ROUTES ====================
 @app.route('/deliveries', methods=['POST'])
 def create_delivery():
@@ -745,6 +967,30 @@ def get_delivery_by_visit(visit_id):
         return jsonify({"error": "Delivery not found"}), 404
     return jsonify(delivery.model_dump(mode='json'))
 
+
+@app.route('/deliveries/date/<date_str>', methods=['GET'])
+def get_deliveries_by_date(date_str):
+    """Get delivery records for a specific date (YYYY-MM-DD)"""
+    try:
+        deliveries = DeliveryCRUD.get_by_date(date_str)
+        # deliveries are returned as raw dicts from the service
+        return jsonify(deliveries)
+    except Exception as e:
+        logger.exception('Error fetching deliveries by date')
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/deliveries/today', methods=['GET'])
+def get_deliveries_today():
+    """Convenience endpoint to fetch today's deliveries"""
+    try:
+        today = date.today().isoformat()
+        deliveries = DeliveryCRUD.get_by_date(today)
+        return jsonify(deliveries)
+    except Exception as e:
+        logger.exception('Error fetching today deliveries')
+        return jsonify({'error': str(e)}), 500
+
 # ==================== RECOVERY STAY ROUTES ====================
 @app.route('/recovery-stays', methods=['POST'])
 def create_recovery_stay():
@@ -764,6 +1010,33 @@ def get_recovery_stay(stay_id):
     if not stay:
         return jsonify({"error": "Recovery stay not found"}), 404
     return jsonify(stay.model_dump(mode='json'))
+
+
+@app.route('/recovery-stays/<int:stay_id>', methods=['PUT'])
+def update_recovery_stay(stay_id):
+    """Update a recovery stay (e.g., set discharge time and discharged_by)"""
+    try:
+        data = request.get_json()
+        # Only allow specific update fields for safety
+        allowed = { 'discharge_time', 'discharged_by', 'notes' }
+        updates = { k: v for k, v in (data or {}).items() if k in allowed }
+
+        # Convert discharge_time to datetime if it's provided as ISO string
+        if 'discharge_time' in updates and updates['discharge_time']:
+            from datetime import datetime as _dt
+            try:
+                updates['discharge_time'] = _dt.fromisoformat(updates['discharge_time'])
+            except Exception:
+                # leave as-is, the service may accept string iso
+                pass
+
+        updated = RecoveryStayCRUD.update(stay_id, updates)
+        if not updated:
+            return jsonify({'error': 'Recovery stay not found'}), 404
+        return jsonify(updated.model_dump(mode='json'))
+    except Exception as e:
+        logger.exception('Error updating recovery stay')
+        return jsonify({'error': str(e)}), 400
 
 # ==================== RECOVERY OBSERVATION ROUTES ====================
 @app.route('/recovery-observations', methods=['POST'])
@@ -1023,6 +1296,46 @@ def get_outstanding_balances():
     """Patient Monthly Statement view for unpaid accounts"""
     balances = ReportService.get_outstanding_balances()
     return jsonify(balances)
+
+
+@app.route('/statements/monthly', methods=['GET'])
+def get_monthly_statements():
+    """Get patient monthly statements split into paid/unpaid by invoice date."""
+    try:
+        month = request.args.get('month', type=int)
+        year = request.args.get('year', type=int)
+        if not month or not year:
+            return jsonify({"error": "Month and Year required"}), 400
+
+        results = ReportService.get_monthly_statements(month, year)
+        # Final safety: sanitize any remaining BSON types before jsonify
+        try:
+            results = _sanitize_for_json(results)
+        except Exception:
+            logger.exception('Failed to sanitize monthly statements result')
+        return jsonify(results)
+    except Exception as e:
+        # Log full stack for server-side debugging and return safe error info
+        logger.exception('Error in /statements/monthly')
+        tb = traceback.format_exc()
+        return jsonify({"error": "internal server error", "detail": str(e), "trace": tb}), 500
+
+
+@app.route('/debug/routes', methods=['GET'])
+def list_routes():
+    """Debug endpoint: list registered routes (for dev only)."""
+    try:
+        rules = []
+        for rule in app.url_map.iter_rules():
+            rules.append({
+                'endpoint': rule.endpoint,
+                'methods': sorted([m for m in rule.methods if m not in ('HEAD','OPTIONS')]),
+                'rule': str(rule)
+            })
+        return jsonify({'routes': rules}), 200
+    except Exception:
+        logger.exception('Failed to list routes')
+        return jsonify({'error': 'failed to list routes'}), 500
 
 @app.route('/reports/daily-delivery-log', methods=['GET'])
 def get_delivery_log():

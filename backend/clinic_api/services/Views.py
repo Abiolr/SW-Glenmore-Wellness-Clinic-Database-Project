@@ -17,9 +17,16 @@ class ViewsManager:
         Initialize ViewsManager
         Uses Database.connect_db() to get database connection
         """
-        from database import Database
+        from clinic_api.database import Database
+
         
         self.db = Database.connect_db()
+        # Cache available collection names for tolerant lookups
+        try:
+            self.collections = set(self.db.list_collection_names())
+        except Exception:
+            self.collections = set()
+
         self.views = [
             'patient_full_details',
             'staff_appointments_summary',
@@ -525,5 +532,6 @@ def get_database():
     Returns:
         MongoDB database instance
     """
-    from database import Database
+    from clinic_api.database import Database
+
     return Database.connect_db()

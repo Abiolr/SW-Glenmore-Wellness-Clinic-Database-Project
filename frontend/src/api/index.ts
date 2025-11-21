@@ -44,7 +44,7 @@ export interface SystemStatus {
  * Get complete system status
  */
 export const getSystemStatus = async (): Promise<SystemStatus> => {
-  return get<SystemStatus>('/api/system/status');
+  return get<SystemStatus>('/health');
 };
 
 // ============================================

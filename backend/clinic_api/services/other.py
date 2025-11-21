@@ -1,5 +1,6 @@
 from typing import List, Optional
 from datetime import datetime
+from pymongo import ReturnDocument
 from ..database import Database
 from ..models import (
     Diagnosis, DiagnosisCreate,
@@ -150,6 +151,13 @@ class PrescriptionCRUD:
         prescription_dict = prescription.model_dump()
         prescription_dict["prescription_id"] = prescription_id
         
+        # Auto-populate patient_id from visit if not provided
+        if not prescription_dict.get("patient_id") and prescription_dict.get("visit_id"):
+            db = Database.connect_db()
+            visit = db.Visit.find_one({"visit_id": prescription_dict["visit_id"]}, {"patient_id": 1, "_id": 0})
+            if visit and visit.get("patient_id"):
+                prescription_dict["patient_id"] = visit["patient_id"]
+        
         if prescription_dict.get("dispensed_at"):
             prescription_dict["dispensed_at"] = prescription_dict["dispensed_at"].isoformat()
         
@@ -208,27 +216,113 @@ class LabTestOrderCRUD:
     def get(cls, labtest_id: int) -> Optional[LabTestOrder]:
         """Get a lab test by ID"""
         collection = Database.get_collection(cls.collection_name)
+        # Try canonical key first, then common legacy variants
         lab_test_data = collection.find_one({"labtest_id": labtest_id}, {"_id": 0})
+        if not lab_test_data:
+            lab_test_data = collection.find_one({"LabTest_Id": labtest_id}, {"_id": 0})
+        if not lab_test_data:
+            lab_test_data = collection.find_one({"Labtest_Id": labtest_id}, {"_id": 0})
         
         if lab_test_data:
-            if lab_test_data.get("result_at"):
-                lab_test_data["result_at"] = datetime.fromisoformat(lab_test_data["result_at"])
-            return LabTestOrder(**lab_test_data)
+            # Normalize legacy keys into canonical shape for the model
+            norm = {
+                'labtest_id': lab_test_data.get('labtest_id') or lab_test_data.get('LabTest_Id') or lab_test_data.get('Labtest_Id'),
+                'visit_id': lab_test_data.get('visit_id') or lab_test_data.get('Visit_Id'),
+                'ordered_by': lab_test_data.get('ordered_by') or lab_test_data.get('Ordered_By'),
+                'test_name': lab_test_data.get('test_name') or lab_test_data.get('Test_Name'),
+                'performed_by': lab_test_data.get('performed_by') or lab_test_data.get('Performed_By') or lab_test_data.get('performedBy'),
+                'result_at': lab_test_data.get('result_at') or lab_test_data.get('Result_At'),
+                'notes': lab_test_data.get('notes') or lab_test_data.get('Result_Text') or lab_test_data.get('Notes') or ''
+            }
+
+            if norm.get('result_at') and isinstance(norm.get('result_at'), str):
+                try:
+                    norm['result_at'] = datetime.fromisoformat(norm['result_at'])
+                except Exception:
+                    pass
+
+            return LabTestOrder(**norm)
         return None
     
     @classmethod
     def get_by_visit(cls, visit_id: int) -> List[LabTestOrder]:
-        """Get all lab tests for a visit"""
+        """Get all lab tests for a visit.
+
+        Tolerant of legacy field names/casing in the DB such as `Visit_Id`,
+        `LabTest_Id`, `Ordered_By`, `Test_Name`, `Result_At`, `Notes`.
+        Normalizes returned documents into the `LabTestOrder` model shape.
+        """
         collection = Database.get_collection(cls.collection_name)
-        lab_tests_data = collection.find({"visit_id": visit_id}, {"_id": 0})
-        
-        lab_tests = []
-        for data in lab_tests_data:
-            if data.get("result_at"):
-                data["result_at"] = datetime.fromisoformat(data["result_at"])
-            lab_tests.append(LabTestOrder(**data))
-        
+
+        # Query for either canonical `visit_id` or legacy `Visit_Id`
+        cursor = collection.find({"$or": [{"visit_id": visit_id}, {"Visit_Id": visit_id}]}, {"_id": 0})
+
+        lab_tests: List[LabTestOrder] = []
+        for data in cursor:
+            # Build normalized dict mapping legacy keys to canonical keys
+            norm = {
+                'labtest_id': data.get('labtest_id') or data.get('LabTest_Id') or data.get('labtestId'),
+                'visit_id': data.get('visit_id') or data.get('Visit_Id'),
+                'ordered_by': data.get('ordered_by') or data.get('Ordered_By') or data.get('orderedBy'),
+                'test_name': data.get('test_name') or data.get('Test_Name') or data.get('testName') or data.get('test'),
+                'performed_by': data.get('performed_by') or data.get('performed_by_id') or data.get('performedBy'),
+                'result_at': data.get('result_at') or data.get('Result_At') or data.get('resultAt'),
+                'notes': data.get('notes') or data.get('Notes') or ''
+            }
+
+            # parse ISO strings into datetimes when possible
+            if norm.get('result_at') and isinstance(norm.get('result_at'), str):
+                try:
+                    norm['result_at'] = datetime.fromisoformat(norm['result_at'])
+                except Exception:
+                    # leave as-is if parsing fails
+                    pass
+
+            try:
+                lab_tests.append(LabTestOrder(**norm))
+            except Exception:
+                # skip malformed docs rather than raise
+                continue
+
         return lab_tests
+
+    @classmethod
+    def get_by_date(cls, date_str: str) -> List[dict]:
+        """Get lab tests that have results on a given date (ISO date 'YYYY-MM-DD').
+
+        Returns normalized dicts with canonical keys so the frontend can consume them
+        regardless of legacy field name capitalization in the DB.
+        """
+        collection = Database.get_collection(cls.collection_name)
+        results: List[dict] = []
+
+        # Query for common timestamp fields that start with the date
+        query = {
+            "$or": [
+                {"result_at": {"$regex": f"^{date_str}"}},
+                {"Result_At": {"$regex": f"^{date_str}"}},
+            ]
+        }
+
+        cursor = collection.find(query, {"_id": 0})
+        for d in cursor:
+            norm = {
+                'labtest_id': d.get('labtest_id') or d.get('LabTest_Id') or d.get('Labtest_Id'),
+                'visit_id': d.get('visit_id') or d.get('Visit_Id'),
+                'ordered_by': d.get('ordered_by') or d.get('Ordered_By'),
+                'test_name': d.get('test_name') or d.get('Test_Name') or d.get('Test') or d.get('test'),
+                'performed_by': d.get('performed_by') or d.get('Performed_By') or d.get('performedBy'),
+                'result_at': d.get('result_at') or d.get('Result_At'),
+                'notes': d.get('notes') or d.get('Result_Text') or d.get('Notes') or ''
+            }
+
+            # convert to ISO string for JSON safety if datetime present
+            if isinstance(norm.get('result_at'), datetime):
+                norm['result_at'] = norm['result_at'].isoformat()
+
+            results.append(norm)
+
+        return results
 
 
 class DeliveryCRUD:
@@ -243,7 +337,10 @@ class DeliveryCRUD:
         
         delivery_dict = delivery.model_dump()
         delivery_dict["delivery_id"] = delivery_id
-        
+        # normalize delivery_date if provided (store as ISO string)
+        if delivery_dict.get("delivery_date") and isinstance(delivery_dict.get("delivery_date"), datetime):
+            delivery_dict["delivery_date"] = delivery_dict["delivery_date"].isoformat()
+
         collection.insert_one(delivery_dict)
         
         return Delivery(**delivery_dict)
@@ -252,11 +349,56 @@ class DeliveryCRUD:
     def get_by_visit(cls, visit_id: int) -> Optional[Delivery]:
         """Get delivery record by visit ID"""
         collection = Database.get_collection(cls.collection_name)
+        # try canonical key first, then legacy `Visit_Id`
         delivery_data = collection.find_one({"visit_id": visit_id}, {"_id": 0})
-        
+        if not delivery_data:
+            delivery_data = collection.find_one({"Visit_Id": visit_id}, {"_id": 0})
+
         if delivery_data:
-            return Delivery(**delivery_data)
+            norm = cls._normalize_delivery_doc(delivery_data)
+            try:
+                return Delivery(**norm)
+            except Exception:
+                # If model coercion fails, return None so caller can handle
+                return None
         return None
+
+    @staticmethod
+    def _normalize_delivery_doc(d: dict) -> dict:
+        """Normalize raw delivery document keys to the expected names.
+        Supports legacy keys: Delivery_Id, Visit_Id, Delivered_By, Start_Time, End_Time, Notes
+        Returns dict with keys: delivery_id, visit_id, performed_by, delivery_date, end_time, notes
+        """
+        out: dict = {}
+        out['delivery_id'] = d.get('delivery_id') or d.get('Delivery_Id') or d.get('DeliveryId') or d.get('_id')
+        out['visit_id'] = d.get('visit_id') or d.get('Visit_Id') or d.get('VisitId')
+        out['performed_by'] = d.get('performed_by') or d.get('performed_by_id') or d.get('Delivered_By') or d.get('DeliveredBy') or d.get('practitioner_id')
+        # choose Start_Time or delivery_date
+        out['delivery_date'] = d.get('delivery_date') or d.get('Start_Time') or d.get('start_time')
+        out['end_time'] = d.get('End_Time') or d.get('end_time') or None
+        out['notes'] = d.get('notes') or d.get('Notes') or ''
+        out['_raw'] = d
+        return out
+
+    @classmethod
+    def get_by_date(cls, date_str: str) -> List[dict]:
+        """Get deliveries that occurred on a given date (ISO date 'YYYY-MM-DD').
+        Returns normalized dicts so frontend receives consistent keys even if DB uses legacy field names.
+        """
+        collection = Database.get_collection(cls.collection_name)
+        results: List[dict] = []
+        # Query for common timestamp fields that start with the date
+        query = {
+            "$or": [
+                {"delivery_date": {"$regex": f"^{date_str}"}},
+                {"Start_Time": {"$regex": f"^{date_str}"}},
+                {"start_time": {"$regex": f"^{date_str}"}}
+            ]
+        }
+        cursor = collection.find(query, {"_id": 0})
+        for d in cursor:
+            results.append(cls._normalize_delivery_doc(d))
+        return results
 
 
 class RecoveryStayCRUD:
@@ -291,6 +433,31 @@ class RecoveryStayCRUD:
             if stay_data.get("discharge_time"):
                 stay_data["discharge_time"] = datetime.fromisoformat(stay_data["discharge_time"])
             return RecoveryStay(**stay_data)
+        return None
+
+    @classmethod
+    def update(cls, stay_id: int, updates: dict) -> Optional[RecoveryStay]:
+        """Update fields on a recovery stay (e.g., discharge_time, discharged_by)"""
+        collection = Database.get_collection(cls.collection_name)
+
+        # If discharge_time is a datetime, convert to isoformat
+        if updates.get('discharge_time') and isinstance(updates.get('discharge_time'), datetime):
+            updates['discharge_time'] = updates['discharge_time'].isoformat()
+
+        result = collection.find_one_and_update(
+            {'stay_id': stay_id},
+            {'$set': updates},
+            projection={'_id': 0},
+            return_document=ReturnDocument.AFTER
+        )
+
+        if result:
+            # convert stored iso strings back to datetimes for model
+            result['admit_time'] = datetime.fromisoformat(result['admit_time'])
+            if result.get('discharge_time'):
+                result['discharge_time'] = datetime.fromisoformat(result['discharge_time'])
+            return RecoveryStay(**result)
+
         return None
 
 

@@ -189,7 +189,7 @@ export const del = async <T = any>(
  */
 export const checkHealth = async (): Promise<any> => {
   try {
-    const response = await get('/api/system/status');
+    const response = await get('/health');
     return response;
   } catch (error) {
     console.error('Health check failed:', error);

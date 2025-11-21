@@ -239,6 +239,11 @@ class PrescriptionBase(BaseModel):
     name_on_label: Optional[str] = None
     dispensed_by: Optional[int] = None  # Staff ID
     dispensed_at: Optional[datetime] = None
+    dosage: Optional[str] = None  # e.g., "1 tablet twice daily"
+    duration: Optional[str] = None  # e.g., "7 days", "2 weeks"
+    price: Optional[float] = None
+    instructions: Optional[str] = None  # Usage instructions
+    patient_id: Optional[int] = None  # For direct patient reference
 
 class PrescriptionCreate(PrescriptionBase):
     pass

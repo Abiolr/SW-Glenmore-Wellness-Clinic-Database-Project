@@ -1,0 +1,34 @@
+/* Print styles for prescription label and receipt */
+@media print {
+  /* Hide everything except prescription forms when printing */
+  body * {
+    visibility: hidden;
+  }
+  
+  .prescription-label,
+  .prescription-label *,
+  .prescription-receipt,
+  .prescription-receipt * {
+    visibility: visible;
+  }
+  
+  .prescription-label,
+  .prescription-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    border: 2px solid #000 !important;
+    page-break-after: always;
+  }
+  
+  /* Hide print button when printing */
+  .prescription-receipt button {
+    display: none !important;
+  }
+  
+  /* Ensure proper page breaks */
+  @page {
+    margin: 1cm;
+  }
+}
