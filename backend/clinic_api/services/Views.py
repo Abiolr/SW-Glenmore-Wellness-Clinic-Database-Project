@@ -18,7 +18,6 @@ class ViewsManager:
         Uses Database.connect_db() to get database connection
         """
         from clinic_api.database import Database
-
         
         self.db = Database.connect_db()
         # Cache available collection names for tolerant lookups
@@ -533,5 +532,4 @@ def get_database():
         MongoDB database instance
     """
     from clinic_api.database import Database
-
     return Database.connect_db()
