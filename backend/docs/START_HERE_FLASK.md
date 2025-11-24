@@ -49,7 +49,7 @@ pip install -r requirements.txt
 Create a file named `.env` in this directory:
 
 ```dotenv
-MONGODB_URI=mongodb+srv://habuq028_db_user:n3HdeFLHS5iE7dAb@glenmorewellnesscluster.zfgmoag.mongodb.net/?appName=GlenmoreWellnessCluster
+MONGODB_URL=mongodb+srv://username:password@glenmorewellnesscluster.zfgmoag.mongodb.net/?appName=GlenmoreWellnessCluster
 MONGODB_DB_NAME=GlenmoreWellnessDB
 ```
 

@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from datetime import date
+from datetime import date, timedelta
 import logging
 import traceback
 from clinic_api.database import Database
@@ -121,92 +121,862 @@ except Exception:
 # ============================================
 # VIEW ENDPOINTS
 # ============================================
+# ============================================================================
+# ENDPOINT 1: Visit Complete Details
+# ============================================================================
 
-# View 1: Patient Full Details
-@app.route('/api/views/patients/full-details', methods=['GET'])
-def get_patient_full_details():
-    """Get all patients with visit statistics"""
+@app.route('/api/views/visit-details', methods=['GET'])
+def get_visit_complete_details():
+    """
+    Get complete visit details with patient, staff, prescriptions, and lab tests
+    
+    Query Parameters:
+    - status: Filter by visit status ("Active" or "Completed")
+    - patient_id: Filter by patient ID
+    - staff_id: Filter by staff ID
+    - start_date: Filter visits from this date (ISO format)
+    - end_date: Filter visits until this date (ISO format)
+    - limit: Limit number of results (default: 100)
+    
+    Examples:
+    - GET /api/views/visit-details
+    - GET /api/views/visit-details?status=Active
+    - GET /api/views/visit-details?patient_id=43
+    - GET /api/views/visit-details?staff_id=48&limit=10
+    - GET /api/views/visit-details?start_date=2025-11-01&end_date=2025-11-30
+    
+    Response:
+    {
+        "data": [
+            {
+                "visit_id": 2,
+                "patient_name": "John Doe",
+                "staff_name": "Dr. Smith",
+                "visit_status": "Active",
+                "prescription_count": 2,
+                "lab_test_count": 1,
+                ...
+            }
+        ],
+        "count": 10,
+        "filters_applied": {...}
+    }
+    """
     try:
-        patients = list(db.patient_full_details.find({}))
-        return jsonify(patients), 200
-    except Exception as e:
-        logger.error(f"Error fetching patient full details: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/views/patients/active', methods=['GET'])
-def get_active_patients():
-    """Get patients with active visits"""
-    try:
-        patients = list(db.patient_full_details.find({'has_active_visits': True}))
-        return jsonify(patients), 200
-    except Exception as e:
-        logger.error(f"Error fetching active patients: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-# View 2: Staff Appointments Summary
-@app.route('/api/views/staff/summary', methods=['GET'])
-def get_staff_summary():
-    """Get staff workload summary"""
-    try:
-        active_only = request.args.get('active_only', 'true').lower() == 'true'
+        db = Database.connect_db()
         
-        if active_only:
-            staff = list(db.staff_appointments_summary.find({'active': True}))
+        # Build filter query
+        filter_query = {}
+        
+        # Filter by status
+        status = request.args.get('status')
+        if status:
+            filter_query['visit_status'] = status
+        
+        # Filter by patient
+        patient_id = request.args.get('patient_id')
+        if patient_id:
+            try:
+                filter_query['patient_id'] = int(patient_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid patient_id'}), 400
+        
+        # Filter by staff
+        staff_id = request.args.get('staff_id')
+        if staff_id:
+            try:
+                filter_query['staff_id'] = int(staff_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid staff_id'}), 400
+        
+        # Filter by date range
+        start_date = request.args.get('start_date')
+        end_date = request.args.get('end_date')
+        
+        if start_date or end_date:
+            date_filter = {}
+            if start_date:
+                try:
+                    date_filter['$gte'] = datetime.fromisoformat(start_date)
+                except ValueError:
+                    return jsonify({'error': 'Invalid start_date format. Use ISO format (YYYY-MM-DD)'}), 400
+            
+            if end_date:
+                try:
+                    # Add one day to include the entire end_date
+                    end_datetime = datetime.fromisoformat(end_date) + timedelta(days=1)
+                    date_filter['$lt'] = end_datetime
+                except ValueError:
+                    return jsonify({'error': 'Invalid end_date format. Use ISO format (YYYY-MM-DD)'}), 400
+            
+            filter_query['start_time'] = date_filter
+        
+        # Get limit
+        limit = request.args.get('limit', 100)
+        try:
+            limit = int(limit)
+            if limit > 1000:
+                limit = 1000  # Max limit
+        except ValueError:
+            limit = 100
+        
+        # Query the view
+        visits = list(db.visit_complete_details.find(filter_query, {'_id': 0}).limit(limit))
+        count = len(visits)
+        
+        return jsonify({
+            'data': visits,
+            'count': count,
+            'filters_applied': {
+                'status': status,
+                'patient_id': patient_id,
+                'staff_id': staff_id,
+                'start_date': start_date,
+                'end_date': end_date,
+                'limit': limit
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# ENDPOINT 2: Patient Financial Summary
+# ============================================================================
+
+@app.route('/api/views/patient-financials', methods=['GET'])
+def get_patient_financial_summary():
+    """
+    Get patient financial summary with invoices and payments
+    
+    Query Parameters:
+    - patient_id: Filter by patient ID
+    - has_balance: Filter patients with outstanding balance (true/false)
+    - min_balance: Minimum outstanding balance
+    - sort_by: Sort field (outstanding_balance, total_invoiced, total_paid)
+    - sort_order: Sort order (asc, desc) - default: desc
+    - limit: Limit number of results (default: 100)
+    
+    Examples:
+    - GET /api/views/patient-financials
+    - GET /api/views/patient-financials?has_balance=true
+    - GET /api/views/patient-financials?min_balance=100
+    - GET /api/views/patient-financials?sort_by=outstanding_balance&sort_order=desc
+    - GET /api/views/patient-financials?patient_id=30
+    
+    Response:
+    {
+        "data": [
+            {
+                "patient_id": 30,
+                "full_name": "John Doe",
+                "total_invoiced": 500.00,
+                "total_paid": 300.00,
+                "outstanding_balance": 200.00,
+                "has_outstanding_balance": true,
+                ...
+            }
+        ],
+        "count": 15,
+        "summary": {
+            "total_outstanding": 5000.00,
+            "total_invoiced": 10000.00,
+            "total_paid": 5000.00
+        }
+    }
+    """
+    try:
+        db = Database.connect_db()
+        
+        # Build filter query
+        filter_query = {}
+        
+        # Filter by patient
+        patient_id = request.args.get('patient_id')
+        if patient_id:
+            try:
+                filter_query['patient_id'] = int(patient_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid patient_id'}), 400
+        
+        # Filter by outstanding balance
+        has_balance = request.args.get('has_balance')
+        if has_balance:
+            if has_balance.lower() == 'true':
+                filter_query['has_outstanding_balance'] = True
+            elif has_balance.lower() == 'false':
+                filter_query['has_outstanding_balance'] = False
+        
+        # Filter by minimum balance
+        min_balance = request.args.get('min_balance')
+        if min_balance:
+            try:
+                filter_query['outstanding_balance'] = {'$gte': float(min_balance)}
+            except ValueError:
+                return jsonify({'error': 'Invalid min_balance'}), 400
+        
+        # Get sort parameters
+        sort_by = request.args.get('sort_by', 'outstanding_balance')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        # Validate sort_by field
+        valid_sort_fields = ['outstanding_balance', 'total_invoiced', 'total_paid', 'patient_id', 'full_name']
+        if sort_by not in valid_sort_fields:
+            sort_by = 'outstanding_balance'
+        
+        # Convert sort order
+        sort_direction = -1 if sort_order == 'desc' else 1
+        
+        # Get limit
+        limit = request.args.get('limit', 100)
+        try:
+            limit = int(limit)
+            if limit > 1000:
+                limit = 1000
+        except ValueError:
+            limit = 100
+        
+        # Query the view
+        patients = list(db.patient_financial_summary.find(
+            filter_query, 
+            {'_id': 0}
+        ).sort(sort_by, sort_direction).limit(limit))
+        
+        count = len(patients)
+        
+        # Calculate summary statistics
+        summary = {
+            'total_outstanding': sum(p.get('outstanding_balance', 0) for p in patients),
+            'total_invoiced': sum(p.get('total_invoiced', 0) for p in patients),
+            'total_paid': sum(p.get('total_paid', 0) for p in patients),
+            'patients_with_balance': sum(1 for p in patients if p.get('has_outstanding_balance', False))
+        }
+        
+        return jsonify({
+            'data': patients,
+            'count': count,
+            'summary': summary,
+            'filters_applied': {
+                'patient_id': patient_id,
+                'has_balance': has_balance,
+                'min_balance': min_balance,
+                'sort_by': sort_by,
+                'sort_order': sort_order
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# ENDPOINT 3: Staff Workload Analysis
+# ============================================================================
+
+@app.route('/api/views/staff-workload', methods=['GET'])
+def get_staff_workload_analysis():
+    """
+    Get staff workload analysis with appointments, visits, and performance metrics
+    
+    Query Parameters:
+    - staff_id: Filter by staff ID
+    - active_only: Show only active staff (true/false) - default: true
+    - is_busy: Filter staff with active visits (true/false)
+    - min_workload: Minimum workload score
+    - sort_by: Sort field (workload_score, total_visits, total_appointments)
+    - sort_order: Sort order (asc, desc) - default: desc
+    
+    Examples:
+    - GET /api/views/staff-workload
+    - GET /api/views/staff-workload?is_busy=true
+    - GET /api/views/staff-workload?min_workload=10
+    - GET /api/views/staff-workload?staff_id=48
+    - GET /api/views/staff-workload?sort_by=workload_score
+    
+    Response:
+    {
+        "data": [
+            {
+                "staff_id": 48,
+                "full_name": "Dr. Jane Smith",
+                "total_appointments": 15,
+                "active_visits": 2,
+                "workload_score": 35,
+                "is_busy": true,
+                ...
+            }
+        ],
+        "count": 5,
+        "summary": {
+            "total_staff": 5,
+            "busy_staff": 2,
+            "total_active_visits": 5
+        }
+    }
+    """
+    try:
+        db = Database.connect_db()
+        
+        # Build filter query
+        filter_query = {}
+        
+        # Filter by staff ID
+        staff_id = request.args.get('staff_id')
+        if staff_id:
+            try:
+                filter_query['staff_id'] = int(staff_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid staff_id'}), 400
+        
+        # Filter by active status
+        active_only = request.args.get('active_only', 'true')
+        if active_only.lower() == 'true':
+            filter_query['active'] = True
+        
+        # Filter by busy status
+        is_busy = request.args.get('is_busy')
+        if is_busy:
+            if is_busy.lower() == 'true':
+                filter_query['is_busy'] = True
+            elif is_busy.lower() == 'false':
+                filter_query['is_busy'] = False
+        
+        # Filter by minimum workload
+        min_workload = request.args.get('min_workload')
+        if min_workload:
+            try:
+                filter_query['workload_score'] = {'$gte': float(min_workload)}
+            except ValueError:
+                return jsonify({'error': 'Invalid min_workload'}), 400
+        
+        # Get sort parameters
+        sort_by = request.args.get('sort_by', 'workload_score')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        # Validate sort_by field
+        valid_sort_fields = ['workload_score', 'total_visits', 'total_appointments', 'active_visits', 'staff_id']
+        if sort_by not in valid_sort_fields:
+            sort_by = 'workload_score'
+        
+        # Convert sort order
+        sort_direction = -1 if sort_order == 'desc' else 1
+        
+        # Query the view
+        staff = list(db.staff_workload_analysis.find(
+            filter_query,
+            {'_id': 0}
+        ).sort(sort_by, sort_direction))
+        
+        count = len(staff)
+        
+        # Calculate summary statistics
+        summary = {
+            'total_staff': count,
+            'busy_staff': sum(1 for s in staff if s.get('is_busy', False)),
+            'total_active_visits': sum(s.get('active_visits', 0) for s in staff),
+            'total_appointments': sum(s.get('total_appointments', 0) for s in staff),
+            'avg_workload_score': sum(s.get('workload_score', 0) for s in staff) / count if count > 0 else 0
+        }
+        
+        return jsonify({
+            'data': staff,
+            'count': count,
+            'summary': summary,
+            'filters_applied': {
+                'staff_id': staff_id,
+                'active_only': active_only,
+                'is_busy': is_busy,
+                'min_workload': min_workload,
+                'sort_by': sort_by
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# ENDPOINT 4: Daily Clinic Schedule
+# ============================================================================
+
+@app.route('/api/views/clinic-schedule', methods=['GET'])
+def get_daily_clinic_schedule():
+    """
+    Get daily clinic schedule with appointments
+    
+    Query Parameters:
+    - date: Filter by specific date (YYYY-MM-DD) - default: today
+    - staff_id: Filter by staff ID
+    - patient_id: Filter by patient ID
+    - appointment_type: Filter by type ("Walk-in" or "Scheduled")
+    - start_time: Filter appointments from this time
+    - end_time: Filter appointments until this time
+    
+    Examples:
+    - GET /api/views/clinic-schedule
+    - GET /api/views/clinic-schedule?date=2025-11-25
+    - GET /api/views/clinic-schedule?staff_id=65
+    - GET /api/views/clinic-schedule?appointment_type=Walk-in
+    - GET /api/views/clinic-schedule?start_time=2025-11-25T09:00:00&end_time=2025-11-25T17:00:00
+    
+    Response:
+    {
+        "data": [
+            {
+                "appointment_id": 37,
+                "patient_name": "John Doe",
+                "staff_name": "Dr. Smith",
+                "scheduled_start": "2025-11-20T10:00:00",
+                "appointment_type": "Scheduled",
+                "color": "#4285f4",
+                ...
+            }
+        ],
+        "count": 12,
+        "date": "2025-11-25",
+        "summary": {
+            "total_appointments": 12,
+            "walk_ins": 3,
+            "scheduled": 9
+        }
+    }
+    """
+    try:
+        db = Database.connect_db()
+        
+        # Build filter query
+        filter_query = {}
+        
+        # Filter by date (default to today)
+        date_param = request.args.get('date')
+        if date_param:
+            try:
+                filter_date = datetime.fromisoformat(date_param)
+            except ValueError:
+                return jsonify({'error': 'Invalid date format. Use YYYY-MM-DD'}), 400
         else:
-            staff = list(db.staff_appointments_summary.find())
+            filter_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
         
-        return jsonify(staff), 200
+        # Set date range for the entire day
+        start_of_day = filter_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        end_of_day = start_of_day + timedelta(days=1)
+        
+        # Apply date filter
+        filter_query['scheduled_start'] = {
+            '$gte': start_of_day,
+            '$lt': end_of_day
+        }
+        
+        # Filter by staff
+        staff_id = request.args.get('staff_id')
+        if staff_id:
+            try:
+                filter_query['staff_id'] = int(staff_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid staff_id'}), 400
+        
+        # Filter by patient
+        patient_id = request.args.get('patient_id')
+        if patient_id:
+            try:
+                filter_query['patient_id'] = int(patient_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid patient_id'}), 400
+        
+        # Filter by appointment type
+        appointment_type = request.args.get('appointment_type')
+        if appointment_type:
+            filter_query['appointment_type'] = appointment_type
+        
+        # Custom time range (overrides date filter if provided)
+        start_time = request.args.get('start_time')
+        end_time = request.args.get('end_time')
+        
+        if start_time or end_time:
+            time_filter = {}
+            if start_time:
+                try:
+                    time_filter['$gte'] = datetime.fromisoformat(start_time)
+                except ValueError:
+                    return jsonify({'error': 'Invalid start_time format'}), 400
+            
+            if end_time:
+                try:
+                    time_filter['$lt'] = datetime.fromisoformat(end_time)
+                except ValueError:
+                    return jsonify({'error': 'Invalid end_time format'}), 400
+            
+            filter_query['scheduled_start'] = time_filter
+        
+        # Query the view
+        appointments = list(db.daily_clinic_schedule.find(
+            filter_query,
+            {'_id': 0}
+        ).sort('scheduled_start', 1))
+        
+        count = len(appointments)
+        
+        # Calculate summary
+        summary = {
+            'total_appointments': count,
+            'walk_ins': sum(1 for a in appointments if a.get('appointment_type') == 'Walk-in'),
+            'scheduled': sum(1 for a in appointments if a.get('appointment_type') == 'Scheduled'),
+            'unique_patients': len(set(a.get('patient_id') for a in appointments if a.get('patient_id'))),
+            'unique_staff': len(set(a.get('staff_id') for a in appointments if a.get('staff_id')))
+        }
+        
+        return jsonify({
+            'data': appointments,
+            'count': count,
+            'date': filter_date.date().isoformat(),
+            'summary': summary,
+            'filters_applied': {
+                'date': date_param or 'today',
+                'staff_id': staff_id,
+                'patient_id': patient_id,
+                'appointment_type': appointment_type
+            }
+        })
+        
     except Exception as e:
-        logger.error(f"Error fetching staff summary: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-# View 3: Active Visits Overview
-@app.route('/api/views/visits/active', methods=['GET'])
-def get_active_visits():
-    """Get all currently active visits (not completed)"""
+# ============================================================================
+# ENDPOINT 5: Patient Clinical History
+# ============================================================================
+
+@app.route('/api/views/patient-history', methods=['GET'])
+def get_patient_clinical_history():
+    """
+    Get patient clinical history with visits and financial summary
+    
+    Query Parameters:
+    - patient_id: Filter by patient ID (required if not using other filters)
+    - has_active_visit: Filter patients with active visits (true/false)
+    - needs_follow_up: Filter patients needing follow-up (true/false)
+    - min_visits: Minimum number of visits
+    - has_balance: Filter patients with outstanding balance (true/false)
+    - sort_by: Sort field (last_visit_date, total_visits, outstanding_balance)
+    - sort_order: Sort order (asc, desc) - default: desc
+    - limit: Limit number of results (default: 100)
+    
+    Examples:
+    - GET /api/views/patient-history?patient_id=30
+    - GET /api/views/patient-history?has_active_visit=true
+    - GET /api/views/patient-history?needs_follow_up=true
+    - GET /api/views/patient-history?min_visits=5
+    - GET /api/views/patient-history?has_balance=true&sort_by=outstanding_balance
+    
+    Response:
+    {
+        "data": [
+            {
+                "patient_id": 30,
+                "full_name": "John Doe",
+                "total_visits": 12,
+                "active_visits": 1,
+                "outstanding_balance": 200.00,
+                "needs_follow_up": true,
+                ...
+            }
+        ],
+        "count": 25,
+        "summary": {
+            "total_patients": 25,
+            "with_active_visits": 5,
+            "needing_follow_up": 8
+        }
+    }
+    """
     try:
-        visits = list(db.active_visits_overview.find())
-        return jsonify(visits), 200
+        db = Database.connect_db()
+        
+        # Build filter query
+        filter_query = {}
+        
+        # Filter by patient ID
+        patient_id = request.args.get('patient_id')
+        if patient_id:
+            try:
+                filter_query['patient_id'] = int(patient_id)
+            except ValueError:
+                return jsonify({'error': 'Invalid patient_id'}), 400
+        
+        # Filter by active visit
+        has_active_visit = request.args.get('has_active_visit')
+        if has_active_visit:
+            if has_active_visit.lower() == 'true':
+                filter_query['has_active_visit'] = True
+            elif has_active_visit.lower() == 'false':
+                filter_query['has_active_visit'] = False
+        
+        # Filter by follow-up needed
+        needs_follow_up = request.args.get('needs_follow_up')
+        if needs_follow_up:
+            if needs_follow_up.lower() == 'true':
+                filter_query['needs_follow_up'] = True
+            elif needs_follow_up.lower() == 'false':
+                filter_query['needs_follow_up'] = False
+        
+        # Filter by minimum visits
+        min_visits = request.args.get('min_visits')
+        if min_visits:
+            try:
+                filter_query['total_visits'] = {'$gte': int(min_visits)}
+            except ValueError:
+                return jsonify({'error': 'Invalid min_visits'}), 400
+        
+        # Filter by outstanding balance
+        has_balance = request.args.get('has_balance')
+        if has_balance:
+            if has_balance.lower() == 'true':
+                filter_query['has_outstanding_balance'] = True
+            elif has_balance.lower() == 'false':
+                filter_query['has_outstanding_balance'] = False
+        
+        # Get sort parameters
+        sort_by = request.args.get('sort_by', 'last_visit_date')
+        sort_order = request.args.get('sort_order', 'desc')
+        
+        # Validate sort_by field
+        valid_sort_fields = ['last_visit_date', 'total_visits', 'outstanding_balance', 'patient_id', 'full_name']
+        if sort_by not in valid_sort_fields:
+            sort_by = 'last_visit_date'
+        
+        # Convert sort order
+        sort_direction = -1 if sort_order == 'desc' else 1
+        
+        # Get limit
+        limit = request.args.get('limit', 100)
+        try:
+            limit = int(limit)
+            if limit > 1000:
+                limit = 1000
+        except ValueError:
+            limit = 100
+        
+        # Query the view
+        patients = list(db.patient_clinical_history.find(
+            filter_query,
+            {'_id': 0}
+        ).sort(sort_by, sort_direction).limit(limit))
+        
+        count = len(patients)
+        
+        # Calculate summary
+        summary = {
+            'total_patients': count,
+            'with_active_visits': sum(1 for p in patients if p.get('has_active_visit', False)),
+            'needing_follow_up': sum(1 for p in patients if p.get('needs_follow_up', False)),
+            'with_outstanding_balance': sum(1 for p in patients if p.get('has_outstanding_balance', False)),
+            'total_visits': sum(p.get('total_visits', 0) for p in patients),
+            'total_outstanding': sum(p.get('outstanding_balance', 0) for p in patients)
+        }
+        
+        return jsonify({
+            'data': patients,
+            'count': count,
+            'summary': summary,
+            'filters_applied': {
+                'patient_id': patient_id,
+                'has_active_visit': has_active_visit,
+                'needs_follow_up': needs_follow_up,
+                'min_visits': min_visits,
+                'has_balance': has_balance,
+                'sort_by': sort_by
+            }
+        })
+        
     except Exception as e:
-        logger.error(f"Error fetching active visits: {e}")
         return jsonify({'error': str(e)}), 500
 
 
-# View 4: Invoice Payment Summary
-@app.route('/api/views/invoices/summary', methods=['GET'])
-def get_invoice_summary():
-    """Get invoice overview with payment details"""
+# ============================================================================
+# BONUS: Views Summary Endpoint
+# ============================================================================
+
+@app.route('/api/views/summary', methods=['GET'])
+def get_views_summary():
+    """
+    Get summary statistics from all views
+    
+    Provides a quick overview of:
+    - Total visits (active vs completed)
+    - Total patients (with balances, needing follow-up)
+    - Total staff (busy vs available)
+    - Today's appointments
+    - Overall financials
+    
+    Example:
+    - GET /api/views/summary
+    
+    Response:
+    {
+        "visits": {
+            "total": 50,
+            "active": 5,
+            "completed": 45
+        },
+        "patients": {
+            "total": 100,
+            "with_balance": 25,
+            "needing_follow_up": 15
+        },
+        "staff": {
+            "total": 10,
+            "active": 8,
+            "busy": 3
+        },
+        "appointments": {
+            "today": 20,
+            "walk_ins": 5,
+            "scheduled": 15
+        },
+        "financials": {
+            "total_outstanding": 5000.00,
+            "total_invoiced": 50000.00,
+            "total_paid": 45000.00
+        }
+    }
+    """
     try:
-        invoices = list(db.invoice_payment_summary.find())
-        return jsonify(invoices), 200
+        db = Database.connect_db()
+        
+        # Get visit summary
+        visits_stats = list(db.visit_complete_details.aggregate([
+            {
+                '$group': {
+                    '_id': None,
+                    'total': {'$sum': 1},
+                    'active': {
+                        '$sum': {
+                            '$cond': [{'$eq': ['$visit_status', 'Active']}, 1, 0]
+                        }
+                    }
+                }
+            }
+        ]))
+        
+        visits_summary = {
+            'total': visits_stats[0]['total'] if visits_stats else 0,
+            'active': visits_stats[0]['active'] if visits_stats else 0,
+            'completed': (visits_stats[0]['total'] - visits_stats[0]['active']) if visits_stats else 0
+        }
+        
+        # Get patient summary
+        patients_stats = list(db.patient_clinical_history.aggregate([
+            {
+                '$group': {
+                    '_id': None,
+                    'total': {'$sum': 1},
+                    'with_balance': {
+                        '$sum': {
+                            '$cond': ['$has_outstanding_balance', 1, 0]
+                        }
+                    },
+                    'needing_follow_up': {
+                        '$sum': {
+                            '$cond': ['$needs_follow_up', 1, 0]
+                        }
+                    }
+                }
+            }
+        ]))
+        
+        patients_summary = {
+            'total': patients_stats[0]['total'] if patients_stats else 0,
+            'with_balance': patients_stats[0]['with_balance'] if patients_stats else 0,
+            'needing_follow_up': patients_stats[0]['needing_follow_up'] if patients_stats else 0
+        }
+        
+        # Get staff summary
+        staff_stats = list(db.staff_workload_analysis.aggregate([
+            {
+                '$group': {
+                    '_id': None,
+                    'total': {'$sum': 1},
+                    'active': {
+                        '$sum': {
+                            '$cond': ['$active', 1, 0]
+                        }
+                    },
+                    'busy': {
+                        '$sum': {
+                            '$cond': ['$is_busy', 1, 0]
+                        }
+                    }
+                }
+            }
+        ]))
+        
+        staff_summary = {
+            'total': staff_stats[0]['total'] if staff_stats else 0,
+            'active': staff_stats[0]['active'] if staff_stats else 0,
+            'busy': staff_stats[0]['busy'] if staff_stats else 0
+        }
+        
+        # Get today's appointments
+        today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+        today_end = today_start + timedelta(days=1)
+        
+        appointments_stats = list(db.daily_clinic_schedule.aggregate([
+            {
+                '$match': {
+                    'scheduled_start': {
+                        '$gte': today_start,
+                        '$lt': today_end
+                    }
+                }
+            },
+            {
+                '$group': {
+                    '_id': None,
+                    'total': {'$sum': 1},
+                    'walk_ins': {
+                        '$sum': {
+                            '$cond': [{'$eq': ['$appointment_type', 'Walk-in']}, 1, 0]
+                        }
+                    }
+                }
+            }
+        ]))
+        
+        appointments_summary = {
+            'today': appointments_stats[0]['total'] if appointments_stats else 0,
+            'walk_ins': appointments_stats[0]['walk_ins'] if appointments_stats else 0,
+            'scheduled': (appointments_stats[0]['total'] - appointments_stats[0]['walk_ins']) if appointments_stats else 0
+        }
+        
+        # Get financial summary
+        financials_stats = list(db.patient_financial_summary.aggregate([
+            {
+                '$group': {
+                    '_id': None,
+                    'total_outstanding': {'$sum': '$outstanding_balance'},
+                    'total_invoiced': {'$sum': '$total_invoiced'},
+                    'total_paid': {'$sum': '$total_paid'}
+                }
+            }
+        ]))
+        
+        financials_summary = {
+            'total_outstanding': financials_stats[0]['total_outstanding'] if financials_stats else 0,
+            'total_invoiced': financials_stats[0]['total_invoiced'] if financials_stats else 0,
+            'total_paid': financials_stats[0]['total_paid'] if financials_stats else 0
+        }
+        
+        return jsonify({
+            'visits': visits_summary,
+            'patients': patients_summary,
+            'staff': staff_summary,
+            'appointments': appointments_summary,
+            'financials': financials_summary,
+            'timestamp': datetime.now().isoformat()
+        })
+        
     except Exception as e:
-        logger.error(f"Error fetching invoice summary: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/views/invoices/unpaid', methods=['GET'])
-def get_unpaid_invoices():
-    """Get invoices that are not fully paid"""
-    try:
-        invoices = list(db.invoice_payment_summary.find({'is_fully_paid': False}))
-        return jsonify(invoices), 200
-    except Exception as e:
-        logger.error(f"Error fetching unpaid invoices: {e}")
-        return jsonify({'error': str(e)}), 500
-
-
-# View 5: Appointment Calendar View
-@app.route('/api/views/appointments/calendar', methods=['GET'])
-def get_calendar_appointments():
-    """Get appointments formatted for calendar display"""
-    try:
-        appointments = list(db.appointment_calendar_view.find())
-        return jsonify(appointments), 200
-    except Exception as e:
-        logger.error(f"Error fetching calendar appointments: {e}")
         return jsonify({'error': str(e)}), 500
 
 
