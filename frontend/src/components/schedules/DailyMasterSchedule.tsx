@@ -20,7 +20,6 @@ export default function DailyMasterSchedule() {
   })
 
   useEffect(() => {
-    // Set today's date on load
     const today = new Date().toISOString().slice(0, 10)
     setSelectedDate(today)
     loadStaffList()
@@ -112,12 +111,15 @@ export default function DailyMasterSchedule() {
     return `${firstName} ${lastName}`.trim() || `Staff ${staffId}`
   }
 
+  // ==== FIXED: Prevent timezone shift ====
   const formatTime = (time: string) => {
     if (!time) return '—'
-    // Handle various time formats
+
     if (time.includes('T')) {
-      return new Date(time).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+      const safe = time.endsWith('Z') ? time : time + 'Z'
+      return new Date(safe).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
     }
+
     return time
   }
 
@@ -150,7 +152,6 @@ export default function DailyMasterSchedule() {
         </div>
       </div>
 
-      {/* Date Selector */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '12px', alignItems: 'center', background: '#f5f5f5', padding: '12px', borderRadius: 6 }}>
         <label style={{ fontWeight: 'bold' }}>Schedule Date:</label>
         <input 
@@ -164,11 +165,11 @@ export default function DailyMasterSchedule() {
 
       {shifts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem', background: '#f9f9f9', borderRadius: 6 }}>
-          <p style={{ margin: 0, color: '#666' }}>No shifts scheduled for {new Date(selectedDate).toLocaleDateString()}</p>
+          {/* ==== FIXED: DO NOT CALL new Date(selectedDate) ==== */}
+          <p style={{ margin: 0, color: '#666' }}>No shifts scheduled for {selectedDate}</p>
         </div>
       ) : (
         <div>
-          {/* Summary Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
             <div style={{ background: '#e3f2fd', padding: '1rem', borderRadius: 6, border: '1px solid #90caf9' }}>
               <div style={{ fontSize: '0.85rem', color: '#1565c0', marginBottom: '0.25rem' }}>Total Shifts</div>
@@ -182,7 +183,6 @@ export default function DailyMasterSchedule() {
             </div>
           </div>
 
-          {/* Shifts Table */}
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #ddd' }}>
               <thead>
@@ -198,8 +198,15 @@ export default function DailyMasterSchedule() {
               </thead>
               <tbody>
                 {shifts.map((shift, i) => {
-                  const start = shift.start_time ? new Date(shift.start_time) : null
-                  const end = shift.end_time ? new Date(shift.end_time) : null
+                  // ==== FIXED: Prevent timezone shift ====
+                  const start = shift.start_time
+                    ? new Date((shift.start_time.endsWith('Z') ? shift.start_time : shift.start_time + 'Z'))
+                    : null
+
+                  const end = shift.end_time
+                    ? new Date((shift.end_time.endsWith('Z') ? shift.end_time : shift.end_time + 'Z'))
+                    : null
+
                   const duration = start && end ? ((end.getTime() - start.getTime()) / (1000 * 60 * 60)).toFixed(1) : '—'
                   
                   return (
@@ -232,7 +239,6 @@ export default function DailyMasterSchedule() {
             </table>
           </div>
 
-          {/* Timeline View */}
           <div style={{ marginTop: '2rem' }}>
             <h3>Timeline View</h3>
             <div style={{ background: '#fafafa', padding: '1rem', borderRadius: 6, border: '1px solid #e0e0e0' }}>
@@ -263,7 +269,6 @@ export default function DailyMasterSchedule() {
         </div>
       )}
 
-      {/* Add Shift Modal */}
       {showModal && (
         <div style={{ 
           position: 'fixed', 

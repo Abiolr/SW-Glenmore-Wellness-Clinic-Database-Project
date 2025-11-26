@@ -109,8 +109,7 @@ export default function MonthlyActivityReport() {
                       {key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </div>
                     <div style={{ fontSize: '1.5rem', fontWeight: 'bold', color: '#333' }}>
-                      {typeof value === "number" ? value.toLocaleString() : String(value)}
-
+                      {typeof value === 'number' ? value.toLocaleString() : value}
                     </div>
                   </div>
                 ))}
