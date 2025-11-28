@@ -40,21 +40,25 @@ export default function DailyMasterSchedule() {
     }
   }
 
-  const loadSchedule = async () => {
-    if (!selectedDate) return
-    
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await get<any[]>(`/schedules/daily-master?date=${selectedDate}`)
-      setShifts(Array.isArray(data) ? data : [])
-    } catch (e) {
-      console.error('Failed to load daily master schedule', e)
-      setError('Failed to load schedule for the selected date')
-    } finally {
-      setLoading(false)
-    }
+const loadSchedule = async () => {
+  if (!selectedDate) return
+  
+  setLoading(true)
+  setError(null)
+  try {
+    console.log('Fetching schedule for date:', selectedDate) // Add this
+    const data = await get<any[]>(`/schedules/daily-master?date=${selectedDate}`)
+    console.log('API Response:', data) // Add this
+    console.log('Is array?', Array.isArray(data)) // Add this
+    console.log('Length:', data?.length) // Add this
+    setShifts(Array.isArray(data) ? data : [])
+  } catch (e) {
+    console.error('Failed to load daily master schedule', e)
+    setError('Failed to load schedule for the selected date')
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleRefresh = () => {
     loadSchedule()
@@ -77,31 +81,39 @@ export default function DailyMasterSchedule() {
     setShowModal(true)
   }
 
-  const handleSubmit = async () => {
-    if (!form.staff_id || !form.shift_date || !form.start_time || !form.end_time) {
-      alert('Please fill in all required fields')
-      return
-    }
-
-    try {
-      const shiftData = {
-        staff_id: Number(form.staff_id),
-        shift_date: form.shift_date,
-        start_time: form.start_time,
-        end_time: form.end_time,
-        role: form.role || undefined,
-        notes: form.notes || undefined
-      }
-
-      await post('/schedules/shifts', shiftData)
-      setShowModal(false)
-      await loadSchedule()
-      alert('Shift added successfully')
-    } catch (err) {
-      console.error('Failed to create shift', err)
-      alert('Failed to create shift')
-    }
+const handleSubmit = async () => {
+  if (!form.staff_id || !form.shift_date || !form.start_time || !form.end_time) {
+    alert('Please fill in all required fields')
+    return
   }
+  try {
+    // Create local datetime and convert to UTC for backend
+    const startLocal = new Date(`${form.shift_date}T${form.start_time}:00`)
+    const endLocal = new Date(`${form.shift_date}T${form.end_time}:00`)
+    
+    // Convert to ISO string (UTC) for backend
+    const startDateTime = startLocal.toISOString()
+    const endDateTime = endLocal.toISOString()
+    
+    const shiftData = {
+      staff_id: Number(form.staff_id),
+      date: form.shift_date,
+      start_time: startDateTime,
+      end_time: endDateTime,
+      role_for_shift: form.role || '',  // Send empty string if not provided
+      notes: form.notes || ''
+    }
+    console.log('Sending shift data:', shiftData)
+    await post('/schedules/shifts', shiftData)
+    setShowModal(false)
+    await loadSchedule()
+    alert('Shift added successfully')
+  } catch (err: any) {
+    console.error('Failed to create shift', err)
+    const errorMsg = err?.response?.data?.error || err?.message || 'Failed to create shift'
+    alert(errorMsg)
+  }
+}
 
   const getStaffName = (staffId: number) => {
     const staff = staffList.find((s) => s.staff_id === staffId || s._id === staffId)
