@@ -21,6 +21,13 @@ class StaffShiftCRUD:
         return StaffShift(**shift_dict)
 
     @classmethod
+    def delete(cls, shift_id: int) -> bool:
+        """Delete a staff shift by ID"""
+        collection = Database.get_collection(cls.collection_name)
+        result = collection.delete_one({"shift_id": shift_id})
+        return result.deleted_count > 0
+
+    @classmethod
     def get_daily_master_schedule(cls, target_date: date) -> List[StaffShift]:
         """Get all staff working on a specific day"""
         collection = Database.get_collection(cls.collection_name)

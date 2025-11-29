@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import LoadingSpinner from '../common/LoadingSpinner'
 import ErrorMessage from '../common/ErrorMessage'
-import { get, post } from '../../api/client'
+// Added 'del' to imports
+import { get, post, del } from '../../api/client'
 
 export default function PractitionerSchedule({ staffId }: { staffId?: number }) {
   const [loading, setLoading] = useState(true)
@@ -23,8 +24,9 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
   })
 
   useEffect(() => {
-    // Set today's date and staff ID on load
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Edmonton' 
+    });
     setSelectedDate(today)
     
     if (staffId) {
@@ -46,7 +48,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
       const staff = await get<any[]>('/staff?active_only=true')
       setStaffList(staff || [])
       
-      // If no staff ID provided, select first staff member
       if (!staffId && staff && staff.length > 0) {
         setSelectedStaff(staff[0].staff_id || staff[0]._id)
       }
@@ -71,11 +72,9 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
     setLoading(true)
     setError(null)
     try {
-      // Load appointments for the staff member on the selected date
       const appts = await get<any[]>(`/appointments/staff/${currentStaffId}?date=${selectedDate}`)
       setAppointments(Array.isArray(appts) ? appts : [])
 
-      // Load shifts for the staff member on the selected date
       try {
         const shiftsData = await get<any[]>(`/schedules/daily-master?date=${selectedDate}`)
         const staffShifts = (shiftsData || []).filter(
@@ -83,7 +82,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
         )
         setShifts(staffShifts)
       } catch (e) {
-        // Shifts endpoint might not return data, that's ok
         setShifts([])
       }
     } catch (e) {
@@ -98,8 +96,26 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
     loadSchedule()
   }
 
+  // New function to handle deletion
+  const handleDelete = async (appointmentId: number) => {
+    if (!window.confirm('Are you sure you want to delete this appointment?')) {
+      return
+    }
+
+    try {
+      await del(`/appointments/${appointmentId}`)
+      alert('Appointment deleted successfully')
+      loadSchedule()
+    } catch (e) {
+      console.error('Failed to delete appointment', e)
+      alert('Failed to delete appointment')
+    }
+  }
+
   const handleToday = () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Edmonton' 
+    });
     setSelectedDate(today)
   }
 
@@ -207,7 +223,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
         </div>
       </div>
 
-      {/* Controls */}
       <div style={{ marginBottom: '1.5rem', display: 'flex', gap: '12px', alignItems: 'center', background: '#f5f5f5', padding: '12px', borderRadius: 6, flexWrap: 'wrap' }}>
         {!staffId && (
           <>
@@ -243,7 +258,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
         </div>
       ) : (
         <div>
-          {/* Practitioner Info Card */}
           <div style={{ background: '#e3f2fd', padding: '1rem', borderRadius: 6, marginBottom: '1.5rem', border: '1px solid #90caf9' }}>
             <h3 style={{ margin: '0 0 0.5rem 0', color: '#1565c0' }}>{currentStaffName}</h3>
             <div style={{ fontSize: '0.9rem', color: '#424242' }}>
@@ -251,7 +265,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
             </div>
           </div>
 
-          {/* Shift Information */}
           {shifts.length > 0 && (
             <div style={{ background: '#f3e5f5', padding: '1rem', borderRadius: 6, marginBottom: '1.5rem', border: '1px solid #ce93d8' }}>
               <h4 style={{ margin: '0 0 0.5rem 0', color: '#6a1b9a' }}>Scheduled Shift</h4>
@@ -264,7 +277,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
             </div>
           )}
 
-          {/* Summary Stats */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
             <div style={{ background: 'white', padding: '0.75rem', borderRadius: 6, border: '1px solid #e0e0e0' }}>
               <div style={{ fontSize: '0.85rem', color: '#666', marginBottom: '0.25rem' }}>Total Appointments</div>
@@ -284,7 +296,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
             </div>
           </div>
 
-          {/* Appointments List */}
           {appointments.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '2rem', background: '#f9f9f9', borderRadius: 6 }}>
               <p style={{ margin: 0, color: '#666' }}>No appointments scheduled for this date</p>
@@ -305,6 +316,7 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
                       <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Duration</th>
                       <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Status</th>
                       <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Notes</th>
+                      <th style={{ padding: '0.75rem', textAlign: 'center', border: '1px solid #ddd' }}></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -312,8 +324,9 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
                       .sort((a, b) => new Date(a.scheduled_start).getTime() - new Date(b.scheduled_start).getTime())
                       .map((appt, i) => {
                         const statusColors = getStatusColor(appt.status)
+                        const apptId = appt.appointment_id || appt._id
                         return (
-                          <tr key={appt.appointment_id || appt._id || i} style={{ borderBottom: '1px solid #eee' }}>
+                          <tr key={apptId || i} style={{ borderBottom: '1px solid #eee' }}>
                             <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
                               <div style={{ fontWeight: 'bold' }}>{formatTime(appt.scheduled_start)}</div>
                               <div style={{ fontSize: '0.85rem', color: '#666' }}>
@@ -344,6 +357,22 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
                             <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
                               {appt.notes || '—'}
                             </td>
+                            <td style={{ padding: '0.75rem', border: '1px solid #ddd', textAlign: 'center' }}>
+                              <button
+                                onClick={() => handleDelete(apptId)}
+                                style={{
+                                  background: '#ffebee',
+                                  color: '#c62828',
+                                  border: '1px solid #ef9a9a',
+                                  borderRadius: '4px',
+                                  padding: '4px 8px',
+                                  cursor: 'pointer',
+                                  fontSize: '0.85rem'
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </td>
                           </tr>
                         )
                       })}
@@ -351,7 +380,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
                 </table>
               </div>
 
-              {/* Timeline View */}
               <div style={{ marginTop: '2rem' }}>
                 <h3>Timeline View</h3>
                 <div style={{ background: '#fafafa', padding: '1rem', borderRadius: 6, border: '1px solid #e0e0e0' }}>
@@ -383,16 +411,33 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
                               </div>
                             )}
                           </div>
-                          <span style={{
-                            padding: '0.25rem 0.5rem',
-                            borderRadius: 4,
-                            fontSize: '0.8rem',
-                            background: getStatusColor(appt.status).bg,
-                            color: getStatusColor(appt.status).text,
-                            fontWeight: 500
-                          }}>
-                            {appt.status}
-                          </span>
+                          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                             <span style={{
+                              padding: '0.25rem 0.5rem',
+                              borderRadius: 4,
+                              fontSize: '0.8rem',
+                              background: getStatusColor(appt.status).bg,
+                              color: getStatusColor(appt.status).text,
+                              fontWeight: 500
+                            }}>
+                              {appt.status}
+                            </span>
+                            <button
+                              onClick={() => handleDelete(appt.appointment_id || appt._id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: '#c62828',
+                                cursor: 'pointer',
+                                fontWeight: 'bold',
+                                fontSize: '1rem',
+                                padding: '0 4px'
+                              }}
+                              title="Delete Appointment"
+                            >
+                              &times;
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -403,7 +448,6 @@ export default function PractitionerSchedule({ staffId }: { staffId?: number }) 
         </div>
       )}
 
-      {/* Add Appointment Modal */}
       {showModal && (
         <div style={{ 
           position: 'fixed', 

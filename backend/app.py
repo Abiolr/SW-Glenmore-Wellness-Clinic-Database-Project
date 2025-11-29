@@ -1481,6 +1481,16 @@ def create_staff_shift():
     except Exception as e:
         return jsonify({"error": str(e)}), 400
 
+@app.route('/schedules/shifts/<int:shift_id>', methods=['DELETE'])
+def delete_staff_shift(shift_id):
+    """Delete a staff shift"""
+    try:
+        if not StaffShiftCRUD.delete(shift_id):
+            return jsonify({"error": "Staff shift not found"}), 404
+        return '', 204
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/schedules/daily-master', methods=['GET'])
 def get_daily_master_schedule():
     date_str = request.args.get('date')
