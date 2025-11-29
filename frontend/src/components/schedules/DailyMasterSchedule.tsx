@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import LoadingSpinner from '../common/LoadingSpinner'
 import ErrorMessage from '../common/ErrorMessage'
-import { get, post } from '../../api/client'
+// Added 'del' to imports
+import { get, post, del } from '../../api/client'
 
 export default function DailyMasterSchedule() {
   const [loading, setLoading] = useState(true)
@@ -20,8 +21,9 @@ export default function DailyMasterSchedule() {
   })
 
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
-    setSelectedDate(today)
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Edmonton' 
+    });    setSelectedDate(today)
     loadStaffList()
   }, [])
 
@@ -40,32 +42,47 @@ export default function DailyMasterSchedule() {
     }
   }
 
-const loadSchedule = async () => {
-  if (!selectedDate) return
-  
-  setLoading(true)
-  setError(null)
-  try {
-    console.log('Fetching schedule for date:', selectedDate) // Add this
-    const data = await get<any[]>(`/schedules/daily-master?date=${selectedDate}`)
-    console.log('API Response:', data) // Add this
-    console.log('Is array?', Array.isArray(data)) // Add this
-    console.log('Length:', data?.length) // Add this
-    setShifts(Array.isArray(data) ? data : [])
-  } catch (e) {
-    console.error('Failed to load daily master schedule', e)
-    setError('Failed to load schedule for the selected date')
-  } finally {
-    setLoading(false)
+  const loadSchedule = async () => {
+    if (!selectedDate) return
+    
+    setLoading(true)
+    setError(null)
+    try {
+      console.log('Fetching schedule for date:', selectedDate)
+      const data = await get<any[]>(`/schedules/daily-master?date=${selectedDate}`)
+      setShifts(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('Failed to load daily master schedule', e)
+      setError('Failed to load schedule for the selected date')
+    } finally {
+      setLoading(false)
+    }
   }
-}
 
   const handleRefresh = () => {
     loadSchedule()
   }
 
+  // New function to handle deletion of shifts
+  const handleDelete = async (shiftId: number) => {
+    if (!window.confirm('Are you sure you want to delete this shift?')) {
+      return
+    }
+
+    try {
+      await del(`/schedules/shifts/${shiftId}`)
+      alert('Shift deleted successfully')
+      await loadSchedule()
+    } catch (e) {
+      console.error('Failed to delete shift', e)
+      alert('Failed to delete shift')
+    }
+  }
+
   const handleToday = () => {
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date().toLocaleDateString('en-CA', {
+      timeZone: 'America/Edmonton' 
+    });
     setSelectedDate(today)
   }
 
@@ -81,39 +98,37 @@ const loadSchedule = async () => {
     setShowModal(true)
   }
 
-const handleSubmit = async () => {
-  if (!form.staff_id || !form.shift_date || !form.start_time || !form.end_time) {
-    alert('Please fill in all required fields')
-    return
-  }
-  try {
-    // Create local datetime and convert to UTC for backend
-    const startLocal = new Date(`${form.shift_date}T${form.start_time}:00`)
-    const endLocal = new Date(`${form.shift_date}T${form.end_time}:00`)
-    
-    // Convert to ISO string (UTC) for backend
-    const startDateTime = startLocal.toISOString()
-    const endDateTime = endLocal.toISOString()
-    
-    const shiftData = {
-      staff_id: Number(form.staff_id),
-      date: form.shift_date,
-      start_time: startDateTime,
-      end_time: endDateTime,
-      role_for_shift: form.role || '',  // Send empty string if not provided
-      notes: form.notes || ''
+  const handleSubmit = async () => {
+    if (!form.staff_id || !form.shift_date || !form.start_time || !form.end_time) {
+      alert('Please fill in all required fields')
+      return
     }
-    console.log('Sending shift data:', shiftData)
-    await post('/schedules/shifts', shiftData)
-    setShowModal(false)
-    await loadSchedule()
-    alert('Shift added successfully')
-  } catch (err: any) {
-    console.error('Failed to create shift', err)
-    const errorMsg = err?.response?.data?.error || err?.message || 'Failed to create shift'
-    alert(errorMsg)
+    try {
+      const startLocal = new Date(`${form.shift_date}T${form.start_time}:00`)
+      const endLocal = new Date(`${form.shift_date}T${form.end_time}:00`)
+      
+      const startDateTime = startLocal.toISOString()
+      const endDateTime = endLocal.toISOString()
+      
+      const shiftData = {
+        staff_id: Number(form.staff_id),
+        date: form.shift_date,
+        start_time: startDateTime,
+        end_time: endDateTime,
+        role_for_shift: form.role || '',
+        notes: form.notes || ''
+      }
+      console.log('Sending shift data:', shiftData)
+      await post('/schedules/shifts', shiftData)
+      setShowModal(false)
+      await loadSchedule()
+      alert('Shift added successfully')
+    } catch (err: any) {
+      console.error('Failed to create shift', err)
+      const errorMsg = err?.response?.data?.error || err?.message || 'Failed to create shift'
+      alert(errorMsg)
+    }
   }
-}
 
   const getStaffName = (staffId: number) => {
     const staff = staffList.find((s) => s.staff_id === staffId || s._id === staffId)
@@ -123,7 +138,6 @@ const handleSubmit = async () => {
     return `${firstName} ${lastName}`.trim() || `Staff ${staffId}`
   }
 
-  // ==== FIXED: Prevent timezone shift ====
   const formatTime = (time: string) => {
     if (!time) return '—'
 
@@ -177,7 +191,6 @@ const handleSubmit = async () => {
 
       {shifts.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '2rem', background: '#f9f9f9', borderRadius: 6 }}>
-          {/* ==== FIXED: DO NOT CALL new Date(selectedDate) ==== */}
           <p style={{ margin: 0, color: '#666' }}>No shifts scheduled for {selectedDate}</p>
         </div>
       ) : (
@@ -206,11 +219,11 @@ const handleSubmit = async () => {
                   <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>End Time</th>
                   <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Duration</th>
                   <th style={{ padding: '0.75rem', textAlign: 'left', border: '1px solid #ddd' }}>Notes</th>
+                  <th style={{ padding: '0.75rem', textAlign: 'center', border: '1px solid #ddd' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {shifts.map((shift, i) => {
-                  // ==== FIXED: Prevent timezone shift ====
                   const start = shift.start_time
                     ? new Date((shift.start_time.endsWith('Z') ? shift.start_time : shift.start_time + 'Z'))
                     : null
@@ -220,11 +233,12 @@ const handleSubmit = async () => {
                     : null
 
                   const duration = start && end ? ((end.getTime() - start.getTime()) / (1000 * 60 * 60)).toFixed(1) : '—'
+                  const shiftId = shift.shift_id || shift._id
                   
                   return (
-                    <tr key={shift.shift_id || shift._id || i} style={{ borderBottom: '1px solid #eee' }}>
+                    <tr key={shiftId || i} style={{ borderBottom: '1px solid #eee' }}>
                       <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
-                        {shift.shift_id || shift._id || 'N/A'}
+                        {shiftId || 'N/A'}
                       </td>
                       <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
                         <strong>{getStaffName(shift.staff_id)}</strong>
@@ -243,6 +257,22 @@ const handleSubmit = async () => {
                       </td>
                       <td style={{ padding: '0.75rem', border: '1px solid #ddd' }}>
                         {shift.notes || '—'}
+                      </td>
+                      <td style={{ padding: '0.75rem', border: '1px solid #ddd', textAlign: 'center' }}>
+                         <button
+                          onClick={() => handleDelete(shiftId)}
+                          style={{
+                            background: '#ffebee',
+                            color: '#c62828',
+                            border: '1px solid #ef9a9a',
+                            borderRadius: '4px',
+                            padding: '4px 8px',
+                            cursor: 'pointer',
+                            fontSize: '0.85rem'
+                          }}
+                        >
+                          Delete
+                        </button>
                       </td>
                     </tr>
                   )
@@ -266,11 +296,31 @@ const handleSubmit = async () => {
                           padding: '0.5rem 0.75rem', 
                           borderRadius: 4,
                           border: '1px solid #90caf9',
-                          fontSize: '0.9rem'
+                          fontSize: '0.9rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px'
                         }}
                       >
-                        {getStaffName(shift.staff_id)}
-                        {shift.role && <span style={{ color: '#666', marginLeft: '0.5rem' }}>({shift.role})</span>}
+                        <span>
+                          {getStaffName(shift.staff_id)}
+                          {shift.role && <span style={{ color: '#666', marginLeft: '0.5rem' }}>({shift.role})</span>}
+                        </span>
+                        <button
+                          onClick={() => handleDelete(shift.shift_id || shift._id)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#d32f2f',
+                            cursor: 'pointer',
+                            fontSize: '1rem',
+                            padding: '0 4px',
+                            lineHeight: 1
+                          }}
+                          title="Delete Shift"
+                        >
+                          &times;
+                        </button>
                       </div>
                     ))}
                   </div>
