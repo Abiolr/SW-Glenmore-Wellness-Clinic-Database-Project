@@ -23,7 +23,7 @@ class ViewsManager:
         except Exception:
             self.collections = set()
 
-        # NEW VIEW NAMES
+        #  VIEW NAMES
         self.views = [
             'visit_complete_details',
             'patient_financial_summary',
