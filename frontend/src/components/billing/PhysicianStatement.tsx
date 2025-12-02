@@ -37,6 +37,7 @@ export default function PhysicianStatement({ invoiceId }: Props) {
       try {
         // Get invoice directly
         const inv = await get<any>(`/invoices/${invoiceId}`).catch(() => null)
+        console.log('Invoice data:', inv)
         
         if (!inv) {
           setError('Invoice not found')
@@ -48,21 +49,29 @@ export default function PhysicianStatement({ invoiceId }: Props) {
         
         // Get patient info
         const patientId = inv.patient_id || inv.Patient_Id
+        console.log('Patient ID:', patientId)
         if (patientId) {
           const pat = await get<any>(`/patients/${patientId}`).catch(() => null)
+          console.log('Patient data:', pat)
+          console.log('Gov Card No:', pat?.gov_card_no)
+          console.log('Insurance No:', pat?.insurance_no)
           setPatient(pat)
         }
 
         // Get visit info
         const visitId = inv.visit_id || inv.Visit_Id
+        console.log('Visit ID:', visitId)
         if (visitId) {
           const vis = await get<any>(`/visits/${visitId}`).catch(() => null)
+          console.log('Visit data:', vis)
           setVisit(vis)
           
           // Get staff info from visit
           const staffId = vis?.staff_id || vis?.Staff_Id
+          console.log('Staff ID:', staffId)
           if (staffId) {
             const st = await get<any>(`/staff/${staffId}`).catch(() => null)
+            console.log('Staff data:', st)
             setStaff(st)
           }
 
@@ -77,10 +86,12 @@ export default function PhysicianStatement({ invoiceId }: Props) {
 
         // Get invoice lines
         const lines = await get<any[]>(`/invoices/${invoiceId}/lines`).catch(() => [])
+        console.log('Invoice lines:', lines)
         setLineItems(lines || [])
 
         // Get payments for invoice
         const pays = await get<any[]>(`/invoices/${invoiceId}/payments`).catch(() => [])
+        console.log('Invoice payments:', pays)
         setPayments(pays || [])
 
       } catch (err) {
@@ -127,12 +138,16 @@ export default function PhysicianStatement({ invoiceId }: Props) {
     return sum + (qty * price)
   }, 0)
 
+  // If no line items, use invoice total_amount as fallback
+  const invoiceTotal = Number(getField(invoice, 'total_amount', 'Total_Amount', 'patient_portion', 'Patient_Portion')) || 0
+  const calculatedTotal = lineTotal > 0 ? lineTotal : invoiceTotal
+
   const totalPaid = payments.reduce((sum, payment) => {
     const amount = Number(getField(payment, 'amount', 'Amount')) || 0
     return sum + amount
   }, 0)
 
-  const balance = lineTotal - totalPaid
+  const balance = calculatedTotal - totalPaid
 
   return (
     <div className="physician-statement" style={{
@@ -156,33 +171,13 @@ export default function PhysicianStatement({ invoiceId }: Props) {
       <div style={{ marginBottom: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '0.75rem' }}>
         <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Patient Information</h4>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.9rem' }}>
-          <div><strong>Name:</strong> {getField(patient, 'first_name', 'First_Name')} {getField(patient, 'last_name', 'Last_Name')}</div>
-          <div><strong>Patient ID:</strong> {getField(patient, 'patient_id', 'Patient_Id')}</div>
+          <div><strong>Name:</strong> {getField(patient, 'first_name', 'First_Name') || ''} {getField(patient, 'last_name', 'Last_Name') || ''}</div>
+          <div><strong>Patient ID:</strong> {getField(patient, 'patient_id', 'Patient_Id') || 'N/A'}</div>
           <div><strong>Date of Birth:</strong> {formatDate(getField(patient, 'date_of_birth', 'Date_Of_Birth'))}</div>
-          <div><strong>Health Card #:</strong> {getField(patient, 'gov_card_no', 'Gov_Card_No') || 'N/A'}</div>
-          <div><strong>Insurance #:</strong> {getField(patient, 'insurance_no', 'Insurance_No') || 'N/A'}</div>
-          <div><strong>Phone:</strong> {getField(patient, 'phone', 'Phone')}</div>
-        </div>
-      </div>
-
-      {/* Professional Staff Information */}
-      <div style={{ marginBottom: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '0.75rem' }}>
-        <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Attending Physician/Professional</h4>
-        <div style={{ fontSize: '0.9rem' }}>
-          <div><strong>Name:</strong> Dr. {getField(staff, 'first_name', 'First_Name')} {getField(staff, 'last_name', 'Last_Name')}</div>
-          <div><strong>Staff ID:</strong> {getField(staff, 'staff_id', 'Staff_Id')}</div>
-          <div><strong>Email:</strong> {getField(staff, 'email', 'Email')}</div>
-        </div>
-      </div>
-
-      {/* Visit Information */}
-      <div style={{ marginBottom: '1rem', borderBottom: '1px solid #ccc', paddingBottom: '0.75rem' }}>
-        <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '1rem' }}>Visit Details</h4>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', fontSize: '0.9rem' }}>
-          <div><strong>Visit ID:</strong> {getField(visit, 'visit_id', 'Visit_Id')}</div>
-          <div><strong>Visit Type:</strong> {getField(visit, 'visit_type', 'Visit_Type') || 'N/A'}</div>
-          <div><strong>Visit Date:</strong> {formatDate(getField(visit, 'start_time', 'Start_Time'))}</div>
           <div><strong>Invoice Date:</strong> {formatDate(getField(invoice, 'invoice_date', 'Invoice_Date'))}</div>
+          <div><strong>Health Card #:</strong> {getField(patient, 'gov_card_no', 'Gov_Card_No', 'GovCardNo') || 'N/A'}</div>
+          <div><strong>Insurance #:</strong> {getField(patient, 'insurance_no', 'Insurance_No', 'InsuranceNo') || 'N/A'}</div>
+          <div><strong>Phone:</strong> {getField(patient, 'phone', 'Phone') || 'N/A'}</div>
         </div>
       </div>
 
@@ -227,22 +222,32 @@ export default function PhysicianStatement({ invoiceId }: Props) {
             </tr>
           </thead>
           <tbody>
-            {lineItems.map((item, idx) => {
-              const qty = Number(getField(item, 'qty', 'Qty', 'quantity')) || 0
-              const price = Number(getField(item, 'unit_price', 'Unit_Price', 'price')) || 0
-              const total = qty * price
-              return (
-                <tr key={idx}>
-                  <td style={{ padding: '0.5rem' }}>{getField(item, 'description', 'Description') || 'Service'}</td>
-                  <td style={{ textAlign: 'center', padding: '0.5rem' }}>{qty}</td>
-                  <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(price)}</td>
-                  <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(total)}</td>
-                </tr>
-              )
-            })}
+            {lineItems.length === 0 && invoiceTotal > 0 ? (
+              // Fallback: Show invoice total as a single line item if no line items exist
+              <tr>
+                <td style={{ padding: '0.5rem' }}>Medical Services (Invoice Total)</td>
+                <td style={{ textAlign: 'center', padding: '0.5rem' }}>1</td>
+                <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(invoiceTotal)}</td>
+                <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(invoiceTotal)}</td>
+              </tr>
+            ) : (
+              lineItems.map((item, idx) => {
+                const qty = Number(getField(item, 'qty', 'Qty', 'quantity')) || 0
+                const price = Number(getField(item, 'unit_price', 'Unit_Price', 'price')) || 0
+                const total = qty * price
+                return (
+                  <tr key={idx}>
+                    <td style={{ padding: '0.5rem' }}>{getField(item, 'description', 'Description') || 'Service'}</td>
+                    <td style={{ textAlign: 'center', padding: '0.5rem' }}>{qty}</td>
+                    <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(price)}</td>
+                    <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(total)}</td>
+                  </tr>
+                )
+              })
+            )}
             <tr style={{ borderTop: '1px solid #000', fontWeight: 'bold' }}>
               <td colSpan={3} style={{ textAlign: 'right', padding: '0.5rem' }}>Subtotal:</td>
-              <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(lineTotal)}</td>
+              <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(calculatedTotal)}</td>
             </tr>
           </tbody>
         </table>
@@ -266,7 +271,7 @@ export default function PhysicianStatement({ invoiceId }: Props) {
               {payments.map((payment, idx) => (
                 <tr key={idx}>
                   <td style={{ padding: '0.5rem' }}>{formatDate(getField(payment, 'payment_date', 'Payment_Date'))}</td>
-                  <td style={{ padding: '0.5rem' }}>{getField(payment, 'payment_method', 'Payment_Method') || 'N/A'}</td>
+                  <td style={{ padding: '0.5rem' }}>{getField(payment, 'method', 'payment_method', 'Payment_Method') || 'N/A'}</td>
                   <td style={{ textAlign: 'right', padding: '0.5rem' }}>{formatCurrency(getField(payment, 'amount', 'Amount'))}</td>
                 </tr>
               ))}
@@ -283,7 +288,7 @@ export default function PhysicianStatement({ invoiceId }: Props) {
       <div style={{ marginTop: '1.5rem', padding: '1rem', backgroundColor: '#f5f5f5', border: '1px solid #999' }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.5rem', fontSize: '1rem' }}>
           <div style={{ fontWeight: 'bold' }}>Total Charges:</div>
-          <div style={{ textAlign: 'right' }}>{formatCurrency(lineTotal)}</div>
+          <div style={{ textAlign: 'right' }}>{formatCurrency(calculatedTotal)}</div>
           <div style={{ fontWeight: 'bold' }}>Total Payments:</div>
           <div style={{ textAlign: 'right' }}>-{formatCurrency(totalPaid)}</div>
           <div style={{ fontWeight: 'bold', fontSize: '1.1rem', borderTop: '2px solid #000', paddingTop: '0.5rem' }}>Balance Due:</div>

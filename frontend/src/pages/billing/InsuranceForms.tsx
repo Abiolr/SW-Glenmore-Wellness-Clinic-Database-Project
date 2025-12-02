@@ -17,7 +17,10 @@ export default function InsuranceForms() {
   useEffect(() => {
     setInvoiceLoading(true)
     get<any[]>('/invoices')
-      .then((data) => setInvoices(data || []))
+      .then((data) => {
+        console.log('All invoices:', data)
+        setInvoices(data || [])
+      })
       .catch(() => setInvoiceError('Failed to load invoices'))
       .finally(() => setInvoiceLoading(false))
   }, [])
@@ -51,6 +54,7 @@ export default function InsuranceForms() {
                 const raw = e.target.value
                 if (!raw) { setSelectedInvoiceId(null); return }
                 const parsed = parseInt(raw, 10)
+                console.log('Selected invoice ID:', parsed)
                 setSelectedInvoiceId(Number.isNaN(parsed) ? null : parsed)
               }}
               style={{ minWidth:280 }}

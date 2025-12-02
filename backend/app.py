@@ -1308,9 +1308,15 @@ def get_payments_by_patient(patient_id):
     payments = PaymentCRUD.get_by_patient(patient_id)
     return jsonify([p.model_dump(mode='json') for p in payments])
 
+@app.route('/invoices/<int:invoice_id>/payments', methods=['GET'])
+def get_invoice_payments(invoice_id):
+    """Get all payments for a specific invoice"""
+    payments = PaymentCRUD.get_by_invoice(invoice_id)
+    return jsonify([p.model_dump(mode='json') for p in payments])
+
 @app.route('/payments/invoice/<int:invoice_id>', methods=['GET'])
 def get_payments_by_invoice(invoice_id):
-    """Get all payments for a specific invoice"""
+    """Get all payments for a specific invoice (legacy endpoint)"""
     payments = PaymentCRUD.get_by_invoice(invoice_id)
     return jsonify([p.model_dump(mode='json') for p in payments])
 

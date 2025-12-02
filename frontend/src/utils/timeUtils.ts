@@ -52,39 +52,35 @@ export const getMSTNow = (): string => {
 
 /**
  * Get an ISO-like timestamp that preserves the Mountain local date (no UTC shift).
- * Returns format YYYY-MM-DDTHH:MM:SS-07:00 (or -06:00 during MDT) so string prefix (YYYY-MM-DD)
- * matches the local calendar day used in regex date queries.
+ * Returns UTC timestamp representing the current MST time
  */
 export const getMSTLocalNow = (): string => {
   const now = new Date()
-  // Get components in Denver timezone via Intl
+  
+  // Get the current time in Denver timezone
   const formatter = new Intl.DateTimeFormat('en-US', {
     timeZone: 'America/Denver',
-    year: 'numeric', month: '2-digit', day: '2-digit',
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false
+    year: 'numeric', 
+    month: '2-digit', 
+    day: '2-digit',
+    hour: '2-digit', 
+    minute: '2-digit', 
+    second: '2-digit', 
+    hour12: false
   })
+  
   const parts = formatter.formatToParts(now)
-  const lookup: Record<string,string> = {}
+  const lookup: Record<string, string> = {}
   parts.forEach(p => { if (p.type !== 'literal') lookup[p.type] = p.value })
-  const year = lookup.year
-  const month = lookup.month
-  const day = lookup.day
-  const hour = lookup.hour
-  const minute = lookup.minute
-  const second = lookup.second
-  // Determine offset (MST = -07:00 standard, MDT = -06:00 daylight). Use current offset from Date.
-  // Offset minutes: getTimezoneOffset gives minutes from UTC for local machine; instead compute Denver offset by creating date string.
-  // Simpler: infer from UTC vs local Denver hour difference.
-  const denverNow = new Date(now.toLocaleString('en-US', { timeZone: 'America/Denver' }))
-  const offsetMinutes = (denverNow.getTime() - Date.UTC(denverNow.getUTCFullYear(), denverNow.getUTCMonth(), denverNow.getUTCDate(), denverNow.getUTCHours(), denverNow.getUTCMinutes(), denverNow.getUTCSeconds(), denverNow.getUTCMilliseconds())) / 60000
-  // offsetMinutes will be negative for timezones behind UTC
-  const totalMinutes = Math.round(offsetMinutes) // -420 or -360 typically
-  const sign = totalMinutes <= 0 ? '-' : '+'
-  const absMinutes = Math.abs(totalMinutes)
-  const offHours = String(Math.floor(absMinutes / 60)).padStart(2,'0')
-  const offMins = String(absMinutes % 60).padStart(2,'0')
-  const offset = `${sign}${offHours}:${offMins}`
-  return `${year}-${month}-${day}T${hour}:${minute}:${second}${offset}`
+  
+  // Create a UTC timestamp that represents this MST time
+  // When displayed with formatMST (which converts to Denver time), it will show correctly
+  const mstTime = `${lookup.year}-${lookup.month}-${lookup.day}T${lookup.hour}:${lookup.minute}:${lookup.second}`
+  
+  // Convert this MST time to UTC by adding the offset
+  const mstDate = new Date(mstTime + '-07:00') // MST is UTC-7
+  
+  return mstDate.toISOString()
 }
 
 /**

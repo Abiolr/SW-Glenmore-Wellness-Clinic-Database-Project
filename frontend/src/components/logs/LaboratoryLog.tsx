@@ -24,11 +24,53 @@ export default function LaboratoryLog({ visitId }: { visitId?: number }) {
   useEffect(() => {
     // Always load staff so user can create tests, but defer lab test data until a date is chosen
     loadStaff()
+    loadVisitsForDropdown()
     if (visitId) {
       // If a specific visit context is provided, still load its tests immediately
       loadData()
     }
   }, [visitId])
+
+  const loadVisitsForDropdown = async () => {
+    try {
+      let v = await get<any[]>('/visits?limit=50').catch(() => [])
+      
+      // Enrich visits with patient names
+      const enrichedVisits = await Promise.all(
+        v.map(async (visit) => {
+          const patientId = visit.patient_id || visit.Patient_Id
+          if (patientId) {
+            try {
+              const patient = await get<any>(`/patients/${patientId}`)
+              const first = patient.first_name || patient.First_Name || ''
+              const last = patient.last_name || patient.Last_Name || ''
+              const name = `${first} ${last}`.trim()
+              return { 
+                ...visit, 
+                patient_name: name || `Patient ${patientId}`,
+                display_name: `Visit ${visit.visit_id || visit._id} - ${name || `Patient ${patientId}`}`
+              }
+            } catch {
+              return { 
+                ...visit, 
+                patient_name: `Patient ${patientId}`,
+                display_name: `Visit ${visit.visit_id || visit._id} - Patient ${patientId}`
+              }
+            }
+          }
+          return { 
+            ...visit, 
+            patient_name: 'Unknown',
+            display_name: `Visit ${visit.visit_id || visit._id} - Unknown Patient`
+          }
+        })
+      )
+      
+      setVisits(enrichedVisits)
+    } catch (e) {
+      console.error('Failed to load visits for dropdown', e)
+    }
+  }
 
   const loadStaff = async () => {
     try {

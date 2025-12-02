@@ -20,11 +20,22 @@ export default function DeliveryRoomLog({ visitId }: { visitId?: number }) {
 
   useEffect(() => {
     loadStaff()
+    loadVisitsForDropdown()
     if (visitId) {
       // If in a visit context, allow immediate loading
       loadData()
     }
   }, [visitId])
+
+  const loadVisitsForDropdown = async () => {
+    try {
+      const v = await get<any[]>('/visits?limit=50').catch(() => [])
+      const enriched = await enrichVisitsWithPatients(v)
+      setVisits(enriched)
+    } catch (e) {
+      console.error('Failed to load visits for dropdown', e)
+    }
+  }
 
   const loadStaff = async () => {
     try {
